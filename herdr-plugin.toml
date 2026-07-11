@@ -2,7 +2,7 @@ id = "kukv.github-dash"
 name = "GitHub Dash"
 version = "0.1.0"
 min_herdr_version = "0.7.0"
-description = "Browse GitHub pull requests and issues for the current workspace."
+description = "Browse GitHub pull requests and issues for the current workspace, and post comments."
 platforms = ["linux", "macos"]
 
 [[build]]

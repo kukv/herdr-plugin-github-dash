@@ -31,6 +31,8 @@ without a keybinding via `herdr plugin action invoke open --plugin kukv.github-d
   dashboard as an overlay pane for that workspace's repository.
 - Ctrl+click a GitHub PR/issue URL in any terminal pane to open its detail
   view directly.
+- In a PR/issue detail view, press `c` to write a comment and `Ctrl+S` to post
+  it (`Esc` cancels).
 
 ### Keys
 
