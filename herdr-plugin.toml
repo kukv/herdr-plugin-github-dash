@@ -18,7 +18,7 @@ command = ["bash", "open.sh"]
 id = "dash"
 title = "GitHub Dash"
 placement = "overlay"
-command = ["bin/github-dash"]
+command = ["bash", "run.sh"]
 
 [[link_handlers]]
 id = "github-pr-issue"
