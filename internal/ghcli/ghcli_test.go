@@ -160,3 +160,36 @@ func TestRunErrorPassesThrough(t *testing.T) {
 		t.Errorf("err = %v, want %v", err, wantErr)
 	}
 }
+
+func TestAddPRComment(t *testing.T) {
+	c, f := newTestClient("https://github.com/kukv/demo/pull/12#issuecomment-1\n", nil)
+	if err := c.AddPRComment("", 12, "hello"); err != nil {
+		t.Fatalf("AddPRComment: %v", err)
+	}
+	wantArgs := []string{"pr", "comment", "12", "--body", "hello"}
+	if !reflect.DeepEqual(f.args, wantArgs) {
+		t.Errorf("args = %v, want %v", f.args, wantArgs)
+	}
+	if f.dir != "/repo" {
+		t.Errorf("dir = %q, want /repo", f.dir)
+	}
+}
+
+func TestAddIssueCommentWithRepoOverride(t *testing.T) {
+	c, f := newTestClient("", nil)
+	if err := c.AddIssueComment("octo/hello", 3, "hi there"); err != nil {
+		t.Fatalf("AddIssueComment: %v", err)
+	}
+	wantArgs := []string{"issue", "comment", "3", "--body", "hi there", "--repo", "octo/hello"}
+	if !reflect.DeepEqual(f.args, wantArgs) {
+		t.Errorf("args = %v, want %v", f.args, wantArgs)
+	}
+}
+
+func TestAddCommentError(t *testing.T) {
+	wantErr := errors.New("gh pr: HTTP 403 forbidden")
+	c, _ := newTestClient("", wantErr)
+	if err := c.AddPRComment("", 12, "x"); !errors.Is(err, wantErr) {
+		t.Errorf("err = %v, want %v", err, wantErr)
+	}
+}
