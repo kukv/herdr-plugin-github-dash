@@ -79,7 +79,7 @@ command = ["bash", "open.sh"]
 id = "dash"
 title = "GitHub Dash"
 placement = "overlay"
-command = ["bin/github-dash"]
+command = ["bash", "run.sh"]   # run.sh は `exec ./bin/github-dash` するだけのシム（下記の検証結果参照）
 
 [[link_handlers]]
 id = "github-pr-issue"
@@ -188,3 +188,11 @@ glamour（Markdown レンダリング）。すべて charmbracelet 製。
 **E2E テストで確認する残項目**: リンクハンドラーの実クリック経由で発火した際の
 コンテキスト内容（`contexts = ["workspace"]` の適用可否を含む）。クリック操作が必要なため
 実装後の手動確認とする。
+
+**実装時の E2E で追加判明（2026-07-12）**: herdr 0.7.1 はペインの相対コマンド
+（例 `["bin/github-dash"]`）をプラグインルート基準で解決せず、PATH 連結で探すため
+起動に失敗する（`No viable candidates found in PATH`）。ペインコマンドは
+`["bash", "run.sh"]` のように argv[0] を PATH 解決可能にし、シムスクリプト内で
+`exec ./bin/github-dash` する（ペインプロセスの cwd はプラグインルートなので相対パスで届く）。
+公式サンプルがすべて `["bash", "xxx.sh"]` 形式なのはこの制約によるものと推定される。
+`herdr plugin install` 経路での挙動は公開後に要確認。
