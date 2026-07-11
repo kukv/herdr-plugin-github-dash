@@ -131,10 +131,13 @@ glamour（Markdown レンダリング）。すべて charmbracelet 製。
 ## データフロー
 
 1. ペイン起動 → `herdrctx` が対象ディレクトリを解決:
-   1. `HERDR_PLUGIN_CONTEXT_JSON` の workspace 情報（cwd フィールドの正確な形式は実装時に確認）
-   2. フォールバック: `HERDR_WORKSPACE_ID` + `$HERDR_BIN_PATH workspace get <id>`
+   1. `HERDR_PLUGIN_CONTEXT_JSON` のトップレベルキー `workspace_cwd`
+   2. フォールバック: 同 JSON の `focused_pane_cwd`
    3. どちらも失敗 → エラー画面
-2. `GITHUB_DASH_URL` が設定されていれば（リンクハンドラー経由）、起動直後にその PR/Issue の詳細画面へ直行
+   （`herdr workspace get` は cwd を含まないことを実機検証済みのため、フォールバックには使わない）
+2. `GITHUB_DASH_URL` が設定されていれば（リンクハンドラー経由）、起動直後にその PR/Issue の詳細画面へ直行。
+   URL のリポジトリがワークスペースのリポジトリと異なる場合があるため、直行モードの取得は
+   常に URL から抽出した `owner/repo` を `gh --repo` で明示する
 3. 一覧: 対象ディレクトリを `exec.Cmd.Dir` にして
    `gh pr list --json number,title,author,state,isDraft,updatedAt,reviewDecision` /
    `gh issue list --json number,title,author,state,updatedAt,labels` を実行。
@@ -158,10 +161,28 @@ glamour（Markdown レンダリング）。すべて charmbracelet 製。
 - `ui`: `Update` へのキー入力→状態遷移のユニットテスト（一覧⇔詳細、タブ切替、終了）
 - E2E: `herdr plugin link <path>` でローカルリンクし、実機の herdr で手動確認
 
-## 実装時に確認する事項
+## 実機検証の結果（2026-07-12、herdr 0.7.1）
 
-- `HERDR_PLUGIN_CONTEXT_JSON` の workspace オブジェクトに cwd がどのキーで入るか
-  （ドキュメントにスキーマ定義がないため、実際の値をログして確認する）
-- `herdr workspace get <id>` の出力形式
-- リンクハンドラーのアクションに `contexts = ["workspace"]` が適用可能か
-  （クリック時は workspace コンテキスト外の可能性があるため、実機で挙動確認）
+デバッグプラグイン（env ダンプ）を `herdr plugin link` で実機に載せて確認した。
+
+- `HERDR_PLUGIN_CONTEXT_JSON` はフラットな JSON。実サンプル:
+  ```json
+  {"workspace_id":"w4","workspace_label":"herdr-plugin-github-dash",
+   "workspace_cwd":"/home/tech/dev/ghq/github.com/kukv/herdr-plugin-github-dash",
+   "tab_id":"w4:t1","tab_label":"1","focused_pane_id":"w4:p2",
+   "focused_pane_cwd":"/home/tech/dev/ghq/github.com/kukv/herdr-plugin-github-dash",
+   "focused_pane_status":"unknown","invocation_source":"cli","correlation_id":"cli:plugin"}
+  ```
+- アクション経由で `herdr plugin pane open` した**ペインプロセスにも同じコンテキスト JSON が
+  ネイティブに渡る**（`workspace_cwd` 入り、`invocation_source` は `api` になる）。
+  open.sh からの転送は不要
+- ペインプロセスの cwd はプラグインルート（ドキュメント記載どおり）。
+  `HERDR_PLUGIN_ENTRYPOINT_ID` も設定される
+- `herdr workspace get` / `workspace list` の応答に cwd は**含まれない**。
+  cwd を持つのはペインレコード（`herdr pane get` の `cwd` / `foreground_cwd`）のみ
+- `gh pr list` / `gh issue list` / `gh pr view` の `--json` フィールド名と出力形状も実物で確認済み
+  （author は `{login, is_bot}`、labels は `{id,name,description,color}` など）
+
+**E2E テストで確認する残項目**: リンクハンドラーの実クリック経由で発火した際の
+コンテキスト内容（`contexts = ["workspace"]` の適用可否を含む）。クリック操作が必要なため
+実装後の手動確認とする。
