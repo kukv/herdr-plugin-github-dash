@@ -35,7 +35,7 @@ func (m Model) listView() string {
 	b.WriteString(prTab + "  " + issueTab + "\n\n")
 
 	switch {
-	case m.loading:
+	case m.listLoading[m.tab]:
 		b.WriteString(m.spin.View() + " loading...\n")
 	case m.tab == tabPRs && len(m.prs) == 0:
 		b.WriteString(dimStyle.Render("No open pull requests") + "\n")
@@ -58,7 +58,7 @@ func (m Model) listView() string {
 }
 
 func (m Model) detailView() string {
-	if m.loading {
+	if m.detailLoading {
 		return m.spin.View() + " loading...\n"
 	}
 	header := titleStyle.Render(m.detailTitle)

@@ -68,13 +68,14 @@ type Model struct {
 	width, height int
 	repoName      string
 
-	screen  screen
-	tab     tabID
-	cursors [2]int
-	prs     []ghcli.PR
-	issues  []ghcli.Issue
-	loaded  [2]bool
-	loading bool
+	screen        screen
+	tab           tabID
+	cursors       [2]int
+	prs           []ghcli.PR
+	issues        []ghcli.Issue
+	loaded        [2]bool
+	listLoading   [2]bool
+	detailLoading bool
 
 	detail       viewport.Model
 	detailTitle  string
@@ -88,15 +89,17 @@ func New(src DataSource, initial *Target) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	m := Model{
-		src:     src,
-		spin:    s,
-		screen:  screenList,
-		loading: true,
-		detail:  viewport.New(80, 20),
+		src:    src,
+		spin:   s,
+		screen: screenList,
+		detail: viewport.New(80, 20),
 	}
 	if initial != nil {
 		m.screen = screenDetail
 		m.detailTarget = *initial
+		m.detailLoading = true
+	} else {
+		m.listLoading[m.tab] = true
 	}
 	return m
 }
@@ -198,9 +201,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.cursors[tabPRs] >= len(m.prs) {
 			m.cursors[tabPRs] = max(len(m.prs)-1, 0)
 		}
-		if m.tab == tabPRs {
-			m.loading = false
-		}
+		m.listLoading[tabPRs] = false
 		return m, nil
 	case issueListMsg:
 		m.issues = []ghcli.Issue(msg)
@@ -208,23 +209,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.cursors[tabIssues] >= len(m.issues) {
 			m.cursors[tabIssues] = max(len(m.issues)-1, 0)
 		}
-		if m.tab == tabIssues {
-			m.loading = false
-		}
+		m.listLoading[tabIssues] = false
 		return m, nil
 	case prDetailMsg:
-		m.loading = false
+		m.detailLoading = false
 		m.detailTitle = fmt.Sprintf("PR #%d %s", msg.Number, msg.Title)
 		m.setDetailContent(prMarkdown(ghcli.PR(msg)))
 		return m, nil
 	case issueDetailMsg:
-		m.loading = false
+		m.detailLoading = false
 		m.detailTitle = fmt.Sprintf("Issue #%d %s", msg.Number, msg.Title)
 		m.setDetailContent(issueMarkdown(ghcli.Issue(msg)))
 		return m, nil
 	case errorMsg:
 		m.screen = screenError
-		m.loading = false
 		m.errText = msg.err.Error()
 		return m, nil
 	case tea.KeyMsg:
@@ -259,7 +257,7 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.tab = tabPRs
 		}
 		if !m.loaded[m.tab] {
-			m.loading = true
+			m.listLoading[m.tab] = true
 			return m, fetchList(m.src, m.tab)
 		}
 		return m, nil
@@ -274,14 +272,14 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "r":
-		m.loading = true
+		m.listLoading[m.tab] = true
 		return m, fetchList(m.src, m.tab)
 	case "enter":
 		if t, ok := m.selectedTarget(); ok {
 			m.detailTarget = t
 			m.detailTitle = ""
 			m.screen = screenDetail
-			m.loading = true
+			m.detailLoading = true
 			return m, fetchDetail(m.src, t)
 		}
 		return m, nil
@@ -317,7 +315,7 @@ func (m Model) selectedTarget() (Target, bool) {
 func (m Model) enterList() (tea.Model, tea.Cmd) {
 	m.screen = screenList
 	if !m.loaded[m.tab] {
-		m.loading = true
+		m.listLoading[m.tab] = true
 		return m, fetchList(m.src, m.tab)
 	}
 	return m, nil
@@ -330,7 +328,7 @@ func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "o":
 		return m, openWeb(m.src, m.detailTarget)
 	case "r":
-		m.loading = true
+		m.detailLoading = true
 		return m, fetchDetail(m.src, m.detailTarget)
 	case "ctrl+c":
 		return m, tea.Quit

@@ -219,7 +219,80 @@ func TestDetailRefetchesOnR(t *testing.T) {
 	m = next.(Model)
 	next, cmd = m.Update(key("r"))
 	m = next.(Model)
-	if !m.loading || cmd == nil {
-		t.Errorf("loading = %v, cmd = %v; want loading with fetch cmd", m.loading, cmd)
+	if !m.detailLoading || cmd == nil {
+		t.Errorf("detailLoading = %v, cmd = %v; want detailLoading with fetch cmd", m.detailLoading, cmd)
+	}
+}
+
+// TestRefreshThenTabSwitchClearsCorrectLoading reproduces the stuck-spinner
+// bug: pressing r on the PRs tab, then tab to the already-loaded Issues
+// tab before the PR fetch returns, must not leave Issues stuck on a
+// spinner when the late prListMsg finally arrives.
+func TestRefreshThenTabSwitchClearsCorrectLoading(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), issues: []ghcli.Issue{{Number: 3, Title: "an issue"}}}
+	m := loadedModel(f)
+	next, _ := m.Update(issueListMsg(f.issues)) // Issues tab already loaded once before
+	m = next.(Model)
+
+	next, refreshCmd := m.Update(key("r")) // refresh PRs; fetch is still "in flight"
+	m = next.(Model)
+	if refreshCmd == nil {
+		t.Fatal("cmd = nil, want fetch cmd for r")
+	}
+
+	next, tabCmd := m.Update(key("tab")) // switch to Issues before the refresh returns
+	m = next.(Model)
+	if m.tab != tabIssues {
+		t.Fatalf("tab = %v, want tabIssues", m.tab)
+	}
+	if tabCmd != nil {
+		t.Fatalf("switching to an already-loaded tab issued cmd = %v, want nil", tabCmd)
+	}
+	if view := m.View(); strings.Contains(view, "loading...") || !strings.Contains(view, "an issue") {
+		t.Errorf("Issues view should render items immediately, got:\n%s", view)
+	}
+
+	next, _ = m.Update(refreshCmd()) // late prListMsg arrives while Issues is visible
+	m = next.(Model)
+	if view := m.View(); strings.Contains(view, "loading...") || !strings.Contains(view, "an issue") {
+		t.Errorf("Issues view got stuck on spinner after late prListMsg, got:\n%s", view)
+	}
+
+	next, _ = m.Update(key("tab")) // switch back to PRs
+	m = next.(Model)
+	if view := m.View(); strings.Contains(view, "loading...") || !strings.Contains(view, "first pr") {
+		t.Errorf("PRs view stuck on spinner or missing refreshed items, got:\n%s", view)
+	}
+}
+
+// TestRefreshThenEnterKeepsDetailSpinner covers the lesser variant: r on the
+// list then enter before the refresh returns. The late prListMsg must not
+// clear the detail screen's spinner while the detail fetch is still pending.
+func TestRefreshThenEnterKeepsDetailSpinner(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr"}}
+	m := loadedModel(f)
+
+	next, refreshCmd := m.Update(key("r")) // refresh PR list; fetch in flight
+	m = next.(Model)
+	if refreshCmd == nil {
+		t.Fatal("cmd = nil, want fetch cmd for r")
+	}
+
+	next, detailCmd := m.Update(key("enter")) // open detail before the refresh returns
+	m = next.(Model)
+	if m.screen != screenDetail || detailCmd == nil {
+		t.Fatalf("screen = %v, cmd = %v; want screenDetail with fetch cmd", m.screen, detailCmd)
+	}
+
+	next, _ = m.Update(refreshCmd()) // late prListMsg arrives while detail is loading
+	m = next.(Model)
+	if view := m.View(); !strings.Contains(view, "loading...") {
+		t.Errorf("detail view lost its spinner after late prListMsg, got:\n%s", view)
+	}
+
+	next, _ = m.Update(detailCmd()) // detail fetch finally resolves
+	m = next.(Model)
+	if view := m.View(); !strings.Contains(view, "first pr") {
+		t.Errorf("detail view missing content after detail fetch resolved, got:\n%s", view)
 	}
 }

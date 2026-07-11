@@ -12,6 +12,8 @@ const prViewJSON = `{"number":12,"title":"feat: add pane view","author":{"is_bot
 
 const issueListJSON = `[{"number":3,"title":"bug: crash on empty list","author":{"is_bot":false,"login":"alice"},"state":"OPEN","updatedAt":"2026-07-10T09:00:00Z","labels":[],"url":"https://github.com/kukv/demo/issues/3"}]`
 
+const issueViewJSON = `{"number":3,"title":"bug: crash on empty list","author":{"is_bot":false,"login":"alice"},"state":"OPEN","updatedAt":"2026-07-10T09:00:00Z","labels":[],"url":"https://github.com/kukv/demo/issues/3","body":"Steps to reproduce.","comments":[{"author":{"login":"carol"},"body":"Confirmed","createdAt":"2026-07-10T10:00:00Z"}]}`
+
 // fakeRun records invocations and returns canned output.
 type fakeRun struct {
 	dir  string
@@ -101,6 +103,22 @@ func TestListIssues(t *testing.T) {
 	}
 }
 
+func TestGetIssueWithRepoOverride(t *testing.T) {
+	c, f := newTestClient(issueViewJSON, nil)
+	issue, err := c.GetIssue("octo/hello", 3)
+	if err != nil {
+		t.Fatalf("GetIssue: %v", err)
+	}
+	wantArgs := []string{"issue", "view", "3", "--json", issueViewFields, "--repo", "octo/hello"}
+	if !reflect.DeepEqual(f.args, wantArgs) {
+		t.Errorf("args = %v, want %v", f.args, wantArgs)
+	}
+	if issue.Body != "Steps to reproduce." || len(issue.Comments) != 1 ||
+		issue.Comments[0].Author.Login != "carol" {
+		t.Errorf("unexpected parse result: %+v", issue)
+	}
+}
+
 func TestRepoName(t *testing.T) {
 	c, f := newTestClient(`{"nameWithOwner":"kukv/demo"}`, nil)
 	name, err := c.RepoName()
@@ -119,6 +137,17 @@ func TestOpenPRWebWithRepoOverride(t *testing.T) {
 		t.Fatalf("OpenPRWeb: %v", err)
 	}
 	wantArgs := []string{"pr", "view", "7", "--web", "--repo", "octo/hello"}
+	if !reflect.DeepEqual(f.args, wantArgs) {
+		t.Errorf("args = %v, want %v", f.args, wantArgs)
+	}
+}
+
+func TestOpenIssueWebWithRepoOverride(t *testing.T) {
+	c, f := newTestClient("", nil)
+	if err := c.OpenIssueWeb("octo/hello", 3); err != nil {
+		t.Fatalf("OpenIssueWeb: %v", err)
+	}
+	wantArgs := []string{"issue", "view", "3", "--web", "--repo", "octo/hello"}
 	if !reflect.DeepEqual(f.args, wantArgs) {
 		t.Errorf("args = %v, want %v", f.args, wantArgs)
 	}
