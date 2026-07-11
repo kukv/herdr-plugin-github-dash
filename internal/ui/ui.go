@@ -3,8 +3,10 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -22,6 +24,8 @@ type DataSource interface {
 	RepoName() (string, error)
 	OpenPRWeb(repo string, number int) error
 	OpenIssueWeb(repo string, number int) error
+	AddPRComment(repo string, number int, body string) error
+	AddIssueComment(repo string, number int, body string) error
 }
 
 type Kind int
@@ -54,12 +58,14 @@ const (
 )
 
 type (
-	prListMsg      []ghcli.PR
-	issueListMsg   []ghcli.Issue
-	prDetailMsg    ghcli.PR
-	issueDetailMsg ghcli.Issue
-	repoNameMsg    string
-	errorMsg       struct{ err error }
+	prListMsg        []ghcli.PR
+	issueListMsg     []ghcli.Issue
+	prDetailMsg      ghcli.PR
+	issueDetailMsg   ghcli.Issue
+	repoNameMsg      string
+	errorMsg         struct{ err error }
+	commentPostedMsg struct{}
+	commentErrorMsg  struct{ err error }
 )
 
 type Model struct {
@@ -83,16 +89,25 @@ type Model struct {
 
 	spin    spinner.Model
 	errText string
+
+	textarea  textarea.Model
+	composing bool
+	posting   bool
+	postErr   string
 }
 
 func New(src DataSource, initial *Target) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
+	ta := textarea.New()
+	ta.Placeholder = "Leave a comment..."
+	ta.ShowLineNumbers = false
 	m := Model{
-		src:    src,
-		spin:   s,
-		screen: screenList,
-		detail: viewport.New(80, 20),
+		src:      src,
+		spin:     s,
+		screen:   screenList,
+		detail:   viewport.New(80, 20),
+		textarea: ta,
 	}
 	if initial != nil {
 		m.screen = screenDetail
@@ -181,12 +196,29 @@ func openWeb(src DataSource, target Target) tea.Cmd {
 	}
 }
 
+func postComment(src DataSource, target Target, body string) tea.Cmd {
+	return func() tea.Msg {
+		var err error
+		if target.Kind == KindPR {
+			err = src.AddPRComment(target.Repo, target.Number, body)
+		} else {
+			err = src.AddIssueComment(target.Repo, target.Number, body)
+		}
+		if err != nil {
+			return commentErrorMsg{err}
+		}
+		return commentPostedMsg{}
+	}
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.detail.Width = msg.Width
 		m.detail.Height = max(msg.Height-4, 5)
+		m.textarea.SetWidth(msg.Width)
+		m.textarea.SetHeight(max(msg.Height-6, 3))
 		return m, nil
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -220,6 +252,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detailLoading = false
 		m.detailTitle = fmt.Sprintf("Issue #%d %s", msg.Number, msg.Title)
 		m.setDetailContent(issueMarkdown(ghcli.Issue(msg)))
+		return m, nil
+	case commentPostedMsg:
+		m.composing = false
+		m.posting = false
+		m.postErr = ""
+		m.textarea.Reset()
+		m.detailLoading = true
+		return m, fetchDetail(m.src, m.detailTarget)
+	case commentErrorMsg:
+		m.posting = false
+		m.postErr = msg.err.Error()
 		return m, nil
 	case errorMsg:
 		m.screen = screenError
@@ -322,6 +365,9 @@ func (m Model) enterList() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.composing {
+		return m.handleComposeKey(msg)
+	}
 	switch msg.String() {
 	case "q", "esc":
 		return m.enterList()
@@ -330,11 +376,45 @@ func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		m.detailLoading = true
 		return m, fetchDetail(m.src, m.detailTarget)
+	case "c":
+		if m.detailLoading {
+			return m, nil
+		}
+		m.composing = true
+		m.postErr = ""
+		m.textarea.Reset()
+		m.textarea.Focus()
+		return m, textarea.Blink
 	case "ctrl+c":
 		return m, tea.Quit
 	}
 	var cmd tea.Cmd
 	m.detail, cmd = m.detail.Update(msg) // j/k などのスクロールは viewport に委譲
+	return m, cmd
+}
+
+func (m Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.posting {
+		return m, nil // 送信中の入力は無視する
+	}
+	switch msg.String() {
+	case "esc":
+		m.composing = false
+		m.postErr = ""
+		m.textarea.Reset()
+		return m, nil
+	case "ctrl+c":
+		return m, tea.Quit
+	case "ctrl+s":
+		if strings.TrimSpace(m.textarea.Value()) == "" {
+			return m, nil // 空本文は送信しない
+		}
+		m.posting = true
+		m.postErr = ""
+		return m, postComment(m.src, m.detailTarget, m.textarea.Value())
+	}
+	var cmd tea.Cmd
+	m.textarea, cmd = m.textarea.Update(msg)
 	return m, cmd
 }
 

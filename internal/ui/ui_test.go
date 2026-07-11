@@ -19,6 +19,9 @@ type fakeSource struct {
 	issue    ghcli.Issue
 	err      error
 	webCalls []string // "pr:<repo>:<n>" / "issue:<repo>:<n>"
+
+	commentCalls []string // "pr:<repo>:<n>:<body>" / "issue:<repo>:<n>:<body>"
+	commentErr   error
 }
 
 func (f *fakeSource) ListPRs() ([]ghcli.PR, error)       { return f.prs, f.err }
@@ -37,6 +40,14 @@ func (f *fakeSource) OpenPRWeb(repo string, n int) error {
 func (f *fakeSource) OpenIssueWeb(repo string, n int) error {
 	f.webCalls = append(f.webCalls, "issue:"+repo+":"+itoa(n))
 	return nil
+}
+func (f *fakeSource) AddPRComment(repo string, n int, body string) error {
+	f.commentCalls = append(f.commentCalls, "pr:"+repo+":"+itoa(n)+":"+body)
+	return f.commentErr
+}
+func (f *fakeSource) AddIssueComment(repo string, n int, body string) error {
+	f.commentCalls = append(f.commentCalls, "issue:"+repo+":"+itoa(n)+":"+body)
+	return f.commentErr
 }
 
 func itoa(n int) string { return string(rune('0' + n)) } // テスト内は n < 10 のみ
@@ -58,6 +69,8 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyEnter}
 	case "esc":
 		return tea.KeyMsg{Type: tea.KeyEsc}
+	case "ctrl+s":
+		return tea.KeyMsg{Type: tea.KeyCtrlS}
 	default:
 		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 	}
@@ -67,6 +80,15 @@ func key(s string) tea.KeyMsg {
 func loadedModel(f *fakeSource) Model {
 	m := New(f, nil)
 	next, _ := m.Update(prListMsg(f.prs))
+	return next.(Model)
+}
+
+// detailModel returns a Model already on the loaded detail screen for PR #1.
+func detailModel(f *fakeSource) Model {
+	m := loadedModel(f)
+	next, cmd := m.Update(key("enter"))
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // fetchDetail の結果を流し込む
 	return next.(Model)
 }
 
@@ -294,5 +316,103 @@ func TestRefreshThenEnterKeepsDetailSpinner(t *testing.T) {
 	m = next.(Model)
 	if view := m.View(); !strings.Contains(view, "first pr") {
 		t.Errorf("detail view missing content after detail fetch resolved, got:\n%s", view)
+	}
+}
+
+func TestCEntersCompose(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("c"))
+	m = next.(Model)
+	if !m.composing {
+		t.Errorf("composing = false, want true after c")
+	}
+	if m.screen != screenDetail {
+		t.Errorf("screen = %v, want screenDetail", m.screen)
+	}
+}
+
+func TestComposeEmptyBodyNotSent(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("c"))
+	m = next.(Model)
+	next, cmd := m.Update(key("ctrl+s")) // textarea は空
+	m = next.(Model)
+	if cmd != nil {
+		t.Errorf("cmd = non-nil, want nil for empty body")
+	}
+	if !m.composing {
+		t.Errorf("composing = false, want still composing")
+	}
+	if len(f.commentCalls) != 0 {
+		t.Errorf("commentCalls = %v, want none", f.commentCalls)
+	}
+}
+
+func TestComposeSubmitPostsAndRefetches(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("c"))
+	m = next.(Model)
+	m.textarea.SetValue("looks good")
+	next, cmd := m.Update(key("ctrl+s"))
+	m = next.(Model)
+	if !m.posting || cmd == nil {
+		t.Fatalf("posting = %v, cmd = %v; want posting with post cmd", m.posting, cmd)
+	}
+	msg := cmd()
+	if _, ok := msg.(commentPostedMsg); !ok {
+		t.Fatalf("msg = %T, want commentPostedMsg", msg)
+	}
+	if len(f.commentCalls) != 1 || f.commentCalls[0] != "pr::1:looks good" {
+		t.Fatalf("commentCalls = %v, want [pr::1:looks good]", f.commentCalls)
+	}
+	next, cmd = m.Update(msg)
+	m = next.(Model)
+	if m.composing || m.posting || !m.detailLoading || cmd == nil {
+		t.Errorf("after posted: composing=%v posting=%v detailLoading=%v cmd=%v; want false,false,true,non-nil",
+			m.composing, m.posting, m.detailLoading, cmd)
+	}
+}
+
+func TestComposeEscCancels(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("c"))
+	m = next.(Model)
+	m.textarea.SetValue("draft")
+	next, _ = m.Update(key("esc"))
+	m = next.(Model)
+	if m.composing {
+		t.Errorf("composing = true after esc, want false")
+	}
+	if m.screen != screenDetail {
+		t.Errorf("screen = %v after esc, want screenDetail (esc cancels compose, not detail)", m.screen)
+	}
+}
+
+func TestComposePostErrorKeepsDraft(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr"},
+		commentErr: errors.New("gh pr: HTTP 403 forbidden")}
+	m := detailModel(f)
+	next, _ := m.Update(key("c"))
+	m = next.(Model)
+	m.textarea.SetValue("hello")
+	next, cmd := m.Update(key("ctrl+s"))
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // commentErrorMsg
+	m = next.(Model)
+	if !m.composing {
+		t.Errorf("composing = false, want still composing after error")
+	}
+	if m.posting {
+		t.Errorf("posting = true, want false after error")
+	}
+	if !strings.Contains(m.postErr, "403") {
+		t.Errorf("postErr = %q, want to contain 403", m.postErr)
+	}
+	if m.textarea.Value() != "hello" {
+		t.Errorf("draft lost: textarea = %q, want hello", m.textarea.Value())
 	}
 }
