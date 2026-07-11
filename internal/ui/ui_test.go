@@ -71,6 +71,8 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyEsc}
 	case "ctrl+s":
 		return tea.KeyMsg{Type: tea.KeyCtrlS}
+	case "ctrl+c":
+		return tea.KeyMsg{Type: tea.KeyCtrlC}
 	default:
 		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 	}
@@ -501,5 +503,25 @@ func TestComposeIgnoresKeysWhilePosting(t *testing.T) {
 	}
 	if m.textarea.Value() != "hello" {
 		t.Errorf("draft changed while posting: %q", m.textarea.Value())
+	}
+}
+
+func TestComposeCtrlCQuitsWhilePosting(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("c"))
+	m = next.(Model)
+	m.textarea.SetValue("hello")
+	next, _ = m.Update(key("ctrl+s")) // posting == true (cmd intentionally not run)
+	m = next.(Model)
+	if !m.posting {
+		t.Fatalf("precondition: want posting=true")
+	}
+	_, cmd := m.Update(key("ctrl+c"))
+	if cmd == nil {
+		t.Fatal("cmd = nil while posting, want tea.Quit")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Errorf("msg = %T, want tea.QuitMsg", cmd())
 	}
 }

@@ -394,8 +394,11 @@ func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
 	if m.posting {
-		return m, nil // 送信中の入力は無視する
+		return m, nil // 送信中はそれ以外の入力を無視する
 	}
 	switch msg.String() {
 	case "esc":
@@ -403,8 +406,6 @@ func (m Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.postErr = ""
 		m.textarea.Reset()
 		return m, nil
-	case "ctrl+c":
-		return m, tea.Quit
 	case "ctrl+s":
 		if strings.TrimSpace(m.textarea.Value()) == "" {
 			return m, nil // 空本文は送信しない
