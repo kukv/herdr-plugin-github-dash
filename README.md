@@ -39,6 +39,7 @@ without a keybinding via `herdr plugin action invoke open --plugin kukv.github-d
 | `tab` | switch PRs / Issues | — |
 | `r` | refresh | refresh |
 | `o` | open in browser | open in browser |
+| `c` | — | comment (`Ctrl+S` send / `Esc` cancel) |
 | `esc` | — | back to list |
 | `q` | quit | back to list |
 

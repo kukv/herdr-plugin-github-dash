@@ -416,3 +416,33 @@ func TestComposePostErrorKeepsDraft(t *testing.T) {
 		t.Errorf("draft lost: textarea = %q, want hello", m.textarea.Value())
 	}
 }
+
+func TestComposeViewShowsTextareaAndHelp(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("c"))
+	m = next.(Model)
+	m.textarea.SetValue("my comment")
+	view := m.View()
+	for _, want := range []string{"my comment", "ctrl+s:send", "esc:cancel"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("compose view missing %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestComposeViewShowsPostError(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr"},
+		commentErr: errors.New("gh pr: HTTP 403 forbidden")}
+	m := detailModel(f)
+	next, _ := m.Update(key("c"))
+	m = next.(Model)
+	m.textarea.SetValue("hello")
+	next, cmd := m.Update(key("ctrl+s"))
+	m = next.(Model)
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	if !strings.Contains(m.View(), "403") {
+		t.Errorf("compose view missing error text:\n%s", m.View())
+	}
+}

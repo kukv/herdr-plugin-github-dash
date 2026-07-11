@@ -58,12 +58,30 @@ func (m Model) listView() string {
 }
 
 func (m Model) detailView() string {
+	if m.composing {
+		return m.composeView()
+	}
 	if m.detailLoading {
 		return m.spin.View() + " loading...\n"
 	}
 	header := titleStyle.Render(m.detailTitle)
-	footer := dimStyle.Render("j/k:scroll  r:refresh  o:browser  esc:back")
+	footer := dimStyle.Render("j/k:scroll  r:refresh  o:browser  c:comment  esc:back")
 	return header + "\n" + m.detail.View() + "\n" + footer
+}
+
+func (m Model) composeView() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render("Comment on "+m.detailTitle) + "\n\n")
+	b.WriteString(m.textarea.View() + "\n\n")
+	if m.postErr != "" {
+		b.WriteString("error: " + m.postErr + "\n\n")
+	}
+	if m.posting {
+		b.WriteString(m.spin.View() + " posting...\n")
+	} else {
+		b.WriteString(dimStyle.Render("ctrl+s:send  esc:cancel"))
+	}
+	return b.String()
 }
 
 func errorView(text string) string {
