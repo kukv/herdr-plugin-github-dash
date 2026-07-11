@@ -446,3 +446,60 @@ func TestComposeViewShowsPostError(t *testing.T) {
 		t.Errorf("compose view missing error text:\n%s", m.View())
 	}
 }
+
+func TestComposeSubmitOnIssueRoutesToIssueComment(t *testing.T) {
+	f := &fakeSource{
+		issues: []ghcli.Issue{{Number: 5, Title: "an issue"}},
+		issue:  ghcli.Issue{Number: 5, Title: "an issue"},
+	}
+	// New model starts on the PR tab with an empty PR list; switch to Issues,
+	// load them, open detail for the issue, then compose.
+	m := New(f, nil)
+	next, cmd := m.Update(key("tab")) // -> Issues tab, triggers fetchList
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // issueListMsg
+	m = next.(Model)
+	next, cmd = m.Update(key("enter")) // open issue detail
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // issueDetailMsg
+	m = next.(Model)
+	next, _ = m.Update(key("c")) // enter compose
+	m = next.(Model)
+	m.textarea.SetValue("issue comment")
+	next, cmd = m.Update(key("ctrl+s"))
+	m = next.(Model)
+	if !m.posting || cmd == nil {
+		t.Fatalf("posting = %v, cmd = %v; want posting with post cmd", m.posting, cmd)
+	}
+	if _, ok := cmd().(commentPostedMsg); !ok {
+		t.Fatalf("msg type wrong")
+	}
+	if len(f.commentCalls) != 1 || f.commentCalls[0] != "issue::5:issue comment" {
+		t.Errorf("commentCalls = %v, want [issue::5:issue comment]", f.commentCalls)
+	}
+}
+
+func TestComposeIgnoresKeysWhilePosting(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("c"))
+	m = next.(Model)
+	m.textarea.SetValue("hello")
+	next, _ = m.Update(key("ctrl+s")) // now posting == true (cmd not run, so no msg yet)
+	m = next.(Model)
+	if !m.posting {
+		t.Fatalf("precondition: posting = false, want true")
+	}
+	// A keystroke while posting must be a no-op: no state change, no extra cmd.
+	next, cmd := m.Update(key("esc"))
+	m = next.(Model)
+	if cmd != nil {
+		t.Errorf("cmd = non-nil while posting, want nil")
+	}
+	if !m.posting || !m.composing {
+		t.Errorf("posting/composing changed while posting: posting=%v composing=%v", m.posting, m.composing)
+	}
+	if m.textarea.Value() != "hello" {
+		t.Errorf("draft changed while posting: %q", m.textarea.Value())
+	}
+}
