@@ -1,0 +1,23 @@
+changelog:
+  exclude:
+    labels:
+      - "Meta: Release note ignored"
+  categories:
+    - title: Breaking Changes 🤯
+      labels:
+        - "Impact: Breaking"
+    - title: New Features 🎉
+      labels:
+        - "Kind: Feature"
+    - title: Enhancement Updates 💪
+      labels:
+        - "Kind: Enhancement"
+    - title: Bug Fix 💊
+      labels:
+        - "Kind: Bug Fix"
+    - title: dependency updates 🛠
+      labels:
+        - "Kind: Dependencies"
+    - title: Other Changes
+      labels:
+        - "*"
