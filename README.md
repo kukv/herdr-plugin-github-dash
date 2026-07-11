@@ -1,6 +1,8 @@
 # herdr-plugin-github-dash
 Herdr plugin for browsing and managing GitHub pull requests and issues
 
+https://github.com/user-attachments/assets/3c83c623-ac2f-4b13-a052-8cf5f9dc72b1
+
 ## Requirements
 
 - [herdr](https://herdr.dev) >= 0.7.0
