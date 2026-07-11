@@ -6,7 +6,7 @@ herdr のペイン内で GitHub の PR / Issue を扱うプラグインの Phase
 ## 決定事項
 
 | 論点 | 決定 |
-|---|---|
+| --- | --- |
 | 対象リポジトリ | ワークスペース連動の単一リポジトリ（横断ビューは対象外） |
 | アプローチ | 自作 TUI（Go + bubbletea）+ `gh` CLI サブプロセス |
 | placement | `overlay`（デフォルト。`plugin.pane.open` で上書き可能） |
@@ -116,7 +116,7 @@ action = "open"
 キーバインド:
 
 | キー | 一覧 | 詳細 |
-|---|---|---|
+| --- | --- | --- |
 | `j` / `k` | カーソル移動 | スクロール |
 | `enter` | 詳細を開く | — |
 | `tab` | PR ⇔ Issue 切替 | — |
@@ -148,7 +148,7 @@ glamour（Markdown レンダリング）。すべて charmbracelet 製。
 ## エラーハンドリング
 
 | 状況 | 挙動 |
-|---|---|
+| --- | --- |
 | `gh` が見つからない / 未認証 | 導入手順（`gh auth login`）を示すエラー画面 |
 | 対象が git リポジトリでない / GitHub リモートなし | gh の stderr をそのまま表示 |
 | ワークスペース解決失敗 | フォールバック後も失敗なら状況を表示するエラー画面 |
@@ -166,6 +166,7 @@ glamour（Markdown レンダリング）。すべて charmbracelet 製。
 デバッグプラグイン（env ダンプ）を `herdr plugin link` で実機に載せて確認した。
 
 - `HERDR_PLUGIN_CONTEXT_JSON` はフラットな JSON。実サンプル:
+
   ```json
   {"workspace_id":"w4","workspace_label":"herdr-plugin-github-dash",
    "workspace_cwd":"/home/tech/dev/ghq/github.com/kukv/herdr-plugin-github-dash",
@@ -173,6 +174,7 @@ glamour（Markdown レンダリング）。すべて charmbracelet 製。
    "focused_pane_cwd":"/home/tech/dev/ghq/github.com/kukv/herdr-plugin-github-dash",
    "focused_pane_status":"unknown","invocation_source":"cli","correlation_id":"cli:plugin"}
   ```
+
 - アクション経由で `herdr plugin pane open` した**ペインプロセスにも同じコンテキスト JSON が
   ネイティブに渡る**（`workspace_cwd` 入り、`invocation_source` は `api` になる）。
   open.sh からの転送は不要
