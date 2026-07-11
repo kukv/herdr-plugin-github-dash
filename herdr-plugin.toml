@@ -1,0 +1,27 @@
+id = "kukv.github-dash"
+name = "GitHub Dash"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+description = "Browse GitHub pull requests and issues for the current workspace."
+platforms = ["linux", "macos"]
+
+[[build]]
+command = ["go", "build", "-o", "bin/github-dash", "."]
+
+[[actions]]
+id = "open"
+title = "Open GitHub dashboard"
+contexts = ["workspace"]
+command = ["bash", "open.sh"]
+
+[[panes]]
+id = "dash"
+title = "GitHub Dash"
+placement = "overlay"
+command = ["bash", "run.sh"]
+
+[[link_handlers]]
+id = "github-pr-issue"
+title = "Open in GitHub Dash"
+pattern = "^https://github\\.com/[^/]+/[^/]+/(issues|pull)/[0-9]+/?$"
+action = "open"

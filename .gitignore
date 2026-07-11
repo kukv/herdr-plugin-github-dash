@@ -40,3 +40,4 @@ tmp/*
 ### Misc ###
 HELP.md
 # <<< repository-fanout managed <<<
+bin/
