@@ -11,12 +11,12 @@ func TestParseTarget(t *testing.T) {
 		url  string
 		want *ui.Target
 	}{
-		{"https://github.com/octo/hello/pull/7",
-			&ui.Target{Kind: ui.KindPR, Repo: "octo/hello", Number: 7}},
-		{"https://github.com/octo/hello/issues/42/",
-			&ui.Target{Kind: ui.KindIssue, Repo: "octo/hello", Number: 42}},
-		{"https://github.com/octo/hello", nil},
-		{"https://example.com/octo/hello/pull/7", nil},
+		{"https://github.com/kukv/test-repo/pull/7",
+			&ui.Target{Kind: ui.KindPR, Repo: "kukv/test-repo", Number: 7}},
+		{"https://github.com/kukv/test-repo/issues/42/",
+			&ui.Target{Kind: ui.KindIssue, Repo: "kukv/test-repo", Number: 42}},
+		{"https://github.com/kukv/test-repo", nil},
+		{"https://example.com/kukv/test-repo/pull/7", nil},
 		{"", nil},
 	}
 	for _, c := range cases {
