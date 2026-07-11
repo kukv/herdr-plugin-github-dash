@@ -172,3 +172,13 @@ func (c *Client) OpenIssueWeb(repo string, number int) error {
 	_, err := c.run(c.dir, appendRepo([]string{"issue", "view", strconv.Itoa(number), "--web"}, repo)...)
 	return err
 }
+
+func (c *Client) AddPRComment(repo string, number int, body string) error {
+	_, err := c.run(c.dir, appendRepo([]string{"pr", "comment", strconv.Itoa(number), "--body", body}, repo)...)
+	return err
+}
+
+func (c *Client) AddIssueComment(repo string, number int, body string) error {
+	_, err := c.run(c.dir, appendRepo([]string{"issue", "comment", strconv.Itoa(number), "--body", body}, repo)...)
+	return err
+}
