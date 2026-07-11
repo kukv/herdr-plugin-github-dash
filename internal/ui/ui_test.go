@@ -159,3 +159,67 @@ func TestOOpensBrowserForSelection(t *testing.T) {
 		t.Errorf("webCalls = %v, want [pr::1]", f.webCalls)
 	}
 }
+
+func TestEnterOpensDetailAndEscReturns(t *testing.T) {
+	f := &fakeSource{
+		prs: samplePRs(),
+		pr: ghcli.PR{Number: 1, Title: "first pr", Author: ghcli.Author{Login: "kukv"},
+			Body: "the body text", Comments: []ghcli.Comment{
+				{Author: ghcli.Author{Login: "bob"}, Body: "a comment"}}},
+	}
+	m := loadedModel(f)
+	next, cmd := m.Update(key("enter"))
+	m = next.(Model)
+	if m.screen != screenDetail || cmd == nil {
+		t.Fatalf("screen = %v, cmd = %v; want screenDetail with fetch cmd", m.screen, cmd)
+	}
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	view := m.View()
+	for _, want := range []string{"first pr", "the body text", "a comment"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("detail view missing %q:\n%s", want, view)
+		}
+	}
+	next, _ = m.Update(key("esc"))
+	m = next.(Model)
+	if m.screen != screenList {
+		t.Errorf("screen = %v after esc, want screenList", m.screen)
+	}
+}
+
+func TestDirectModeStartsOnDetailWithRepo(t *testing.T) {
+	f := &fakeSource{pr: ghcli.PR{Number: 7, Title: "external pr"}}
+	m := New(f, &Target{Kind: KindPR, Repo: "octo/hello", Number: 7})
+	if m.screen != screenDetail {
+		t.Fatalf("screen = %v, want screenDetail", m.screen)
+	}
+	next, _ := m.Update(fetchDetail(f, m.detailTarget)())
+	m = next.(Model)
+	if !strings.Contains(m.View(), "external pr") {
+		t.Errorf("view missing detail:\n%s", m.View())
+	}
+	// o キーは Repo を引き継いでブラウザを開く
+	_, cmd := m.Update(key("o"))
+	if cmd == nil {
+		t.Fatal("cmd = nil, want openWeb cmd")
+	}
+	cmd()
+	if len(f.webCalls) != 1 || f.webCalls[0] != "pr:octo/hello:7" {
+		t.Errorf("webCalls = %v, want [pr:octo/hello:7]", f.webCalls)
+	}
+}
+
+func TestDetailRefetchesOnR(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr"}}
+	m := loadedModel(f)
+	next, cmd := m.Update(key("enter"))
+	m = next.(Model)
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	next, cmd = m.Update(key("r"))
+	m = next.(Model)
+	if !m.loading || cmd == nil {
+		t.Errorf("loading = %v, cmd = %v; want loading with fetch cmd", m.loading, cmd)
+	}
+}

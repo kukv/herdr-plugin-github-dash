@@ -57,12 +57,13 @@ func (m Model) listView() string {
 	return b.String()
 }
 
-// detailView は Task 4 で完成させる。
 func (m Model) detailView() string {
 	if m.loading {
 		return m.spin.View() + " loading...\n"
 	}
-	return m.detailTitle + "\n"
+	header := titleStyle.Render(m.detailTitle)
+	footer := dimStyle.Render("j/k:scroll  r:refresh  o:browser  esc:back")
+	return header + "\n" + m.detail.View() + "\n" + footer
 }
 
 func errorView(text string) string {
@@ -112,5 +113,61 @@ func relTime(now, t time.Time) string {
 		return fmt.Sprintf("%dh ago", int(d.Hours()))
 	default:
 		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	}
+}
+
+func prMarkdown(pr ghcli.PR) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# #%d %s\n\n", pr.Number, pr.Title)
+	fmt.Fprintf(&b, "- **author**: @%s\n", pr.Author.Login)
+	state := pr.State
+	if pr.IsDraft {
+		state += " (draft)"
+	}
+	fmt.Fprintf(&b, "- **state**: %s\n", state)
+	if pr.ReviewDecision != "" {
+		fmt.Fprintf(&b, "- **review**: %s\n", pr.ReviewDecision)
+	}
+	writeCommonMeta(&b, pr.Labels, pr.UpdatedAt)
+	writeBody(&b, pr.Body)
+	writeComments(&b, pr.Comments)
+	return b.String()
+}
+
+func issueMarkdown(issue ghcli.Issue) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# #%d %s\n\n", issue.Number, issue.Title)
+	fmt.Fprintf(&b, "- **author**: @%s\n", issue.Author.Login)
+	fmt.Fprintf(&b, "- **state**: %s\n", issue.State)
+	writeCommonMeta(&b, issue.Labels, issue.UpdatedAt)
+	writeBody(&b, issue.Body)
+	writeComments(&b, issue.Comments)
+	return b.String()
+}
+
+func writeCommonMeta(b *strings.Builder, labels []ghcli.Label, updatedAt time.Time) {
+	if len(labels) > 0 {
+		names := make([]string, len(labels))
+		for i, l := range labels {
+			names[i] = l.Name
+		}
+		fmt.Fprintf(b, "- **labels**: %s\n", strings.Join(names, ", "))
+	}
+	fmt.Fprintf(b, "- **updated**: %s\n", updatedAt.Format("2006-01-02 15:04"))
+}
+
+func writeBody(b *strings.Builder, body string) {
+	b.WriteString("\n---\n\n")
+	if body != "" {
+		b.WriteString(body)
+	} else {
+		b.WriteString("_no description_")
+	}
+}
+
+func writeComments(b *strings.Builder, comments []ghcli.Comment) {
+	for _, c := range comments {
+		fmt.Fprintf(b, "\n\n---\n\n**@%s** — %s\n\n%s",
+			c.Author.Login, c.CreatedAt.Format("2006-01-02 15:04"), c.Body)
 	}
 }

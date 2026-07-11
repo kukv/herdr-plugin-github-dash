@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -40,5 +41,32 @@ func TestReviewIcon(t *testing.T) {
 		if got := reviewIcon(c.pr); got != c.want {
 			t.Errorf("reviewIcon(%+v) = %q, want %q", c.pr, got, c.want)
 		}
+	}
+}
+
+func TestPRMarkdownContainsMetaBodyAndComments(t *testing.T) {
+	pr := ghcli.PR{
+		Number: 12, Title: "feat: pane", Author: ghcli.Author{Login: "kukv"},
+		State: "OPEN", IsDraft: true, ReviewDecision: "REVIEW_REQUIRED",
+		Labels: []ghcli.Label{{Name: "Kind: Feature"}},
+		Body:   "body text",
+		Comments: []ghcli.Comment{
+			{Author: ghcli.Author{Login: "bob"}, Body: "comment text",
+				CreatedAt: time.Date(2026, 7, 11, 11, 0, 0, 0, time.UTC)},
+		},
+	}
+	md := prMarkdown(pr)
+	for _, want := range []string{"#12", "feat: pane", "@kukv", "OPEN (draft)",
+		"REVIEW_REQUIRED", "Kind: Feature", "body text", "@bob", "comment text"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+}
+
+func TestIssueMarkdownEmptyBody(t *testing.T) {
+	md := issueMarkdown(ghcli.Issue{Number: 3, Title: "an issue"})
+	if !strings.Contains(md, "_no description_") {
+		t.Errorf("markdown missing empty-body placeholder:\n%s", md)
 	}
 }

@@ -2,9 +2,12 @@
 package ui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 
 	"github.com/kukv/herdr-plugin-github-dash/internal/ghcli"
 )
@@ -209,6 +212,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading = false
 		}
 		return m, nil
+	case prDetailMsg:
+		m.loading = false
+		m.detailTitle = fmt.Sprintf("PR #%d %s", msg.Number, msg.Title)
+		m.setDetailContent(prMarkdown(ghcli.PR(msg)))
+		return m, nil
+	case issueDetailMsg:
+		m.loading = false
+		m.detailTitle = fmt.Sprintf("Issue #%d %s", msg.Number, msg.Title)
+		m.setDetailContent(issueMarkdown(ghcli.Issue(msg)))
+		return m, nil
 	case errorMsg:
 		m.screen = screenError
 		m.loading = false
@@ -310,15 +323,39 @@ func (m Model) enterList() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleDetailKey は Task 4 で完成させる。ここでは戻る/終了のみ。
 func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "esc":
 		return m.enterList()
+	case "o":
+		return m, openWeb(m.src, m.detailTarget)
+	case "r":
+		m.loading = true
+		return m, fetchDetail(m.src, m.detailTarget)
 	case "ctrl+c":
 		return m, tea.Quit
 	}
-	return m, nil
+	var cmd tea.Cmd
+	m.detail, cmd = m.detail.Update(msg) // j/k などのスクロールは viewport に委譲
+	return m, cmd
+}
+
+// setDetailContent renders markdown through glamour into the viewport.
+// glamour が失敗した場合は生の Markdown をそのまま表示する。
+func (m *Model) setDetailContent(md string) {
+	width := m.width
+	if width <= 0 {
+		width = 80
+	}
+	content := md
+	if r, err := glamour.NewTermRenderer(glamour.WithAutoStyle(),
+		glamour.WithWordWrap(width-2)); err == nil {
+		if out, err := r.Render(md); err == nil {
+			content = out
+		}
+	}
+	m.detail.SetContent(content)
+	m.detail.GotoTop()
 }
 
 func (m Model) View() string {
