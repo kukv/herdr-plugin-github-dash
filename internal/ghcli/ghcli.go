@@ -80,7 +80,9 @@ func runGh(dir string, args ...string) ([]byte, error) {
 	if _, err := exec.LookPath("gh"); err != nil {
 		return nil, ErrGhNotFound
 	}
-	cmd := exec.Command("gh", args...)
+	// gh subcommand args are built internally from typed values (subcommand,
+	// numbers, flags), never from untrusted external input.
+	cmd := exec.Command("gh", args...) //nolint:gosec // G204: args are internally constructed, not attacker-controlled
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

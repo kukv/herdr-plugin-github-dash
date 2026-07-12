@@ -618,7 +618,7 @@ func (m Model) handlePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.picker.moveDown(visibleRows(m.height))
 		return m, nil
 	case "k", "up":
-		m.picker.moveUp(visibleRows(m.height))
+		m.picker.moveUp()
 		return m, nil
 	case " ", "space":
 		m.picker.toggle()

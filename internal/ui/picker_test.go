@@ -85,7 +85,7 @@ func TestPickerCursorAndScroll(t *testing.T) {
 		t.Errorf("cursor moved past end: %d", p.cursor)
 	}
 	for i := 0; i < 5; i++ {
-		p.moveUp(2)
+		p.moveUp()
 	}
 	if p.cursor != 0 || p.offset != 0 {
 		t.Errorf("cursor/offset = %d/%d, want 0/0", p.cursor, p.offset)

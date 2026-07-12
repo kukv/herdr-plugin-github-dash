@@ -113,7 +113,7 @@ func (m Model) confirmView() string {
 	}
 	var b strings.Builder
 	b.WriteString(header + "\n\n")
-	b.WriteString(fmt.Sprintf("%s this %s? ", verb, noun))
+	fmt.Fprintf(&b, "%s this %s? ", verb, noun)
 	if m.working {
 		b.WriteString(m.spin.View() + " working...\n")
 	} else {

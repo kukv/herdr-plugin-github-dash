@@ -41,3 +41,7 @@ tmp/*
 HELP.md
 # <<< repository-fanout managed <<<
 bin/
+
+### Test / coverage artifacts ###
+coverage.out
+test-report.xml
