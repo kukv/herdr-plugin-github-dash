@@ -26,13 +26,13 @@ update 機構は無し）、`version` フィールドはメタデータのみで
 ### 1. `.github/workflows/ci.yaml`
 
 - トリガー: `on: pull_request`（main への直接 push では走らせない）
-- `permissions`: `contents: read` / `pull-requests: write`（octocov の PR コメント用）
+- `permissions`: `contents: read` / `pull-requests: write` / `actions: read`（octocov の PR コメント・実行時間取得用）
 - ジョブ（並列・独立）:
   - **lint**
     - `actions/checkout`
     - `actions/setup-go`（`go-version-file: go.mod`, `cache: false`）
-    - `golangci/golangci-lint-action@v7`（golangci-lint v2 対応）で `run`
-    - `golangci-lint fmt --diff` 相当でフォーマット崩れを検出し fail させる
+    - golangci-lint を install script でバージョン固定（`v2.12.2`）して導入し、`golangci-lint run ./...` を実行
+    - `golangci-lint fmt --diff ./...` でフォーマット崩れを検出し fail させる（崩れがあれば exit 1）
   - **test**
     - `actions/checkout`
     - `actions/setup-go`（`go-version-file: go.mod`, `cache: false`）
