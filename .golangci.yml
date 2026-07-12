@@ -10,11 +10,6 @@ linters:
     - bodyclose
     - unconvert
     - unparam
-    - prealloc
-  settings:
-    gosec:
-      excludes:
-        - G204
   exclusions:
     rules:
       - linters:

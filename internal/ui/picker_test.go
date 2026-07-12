@@ -25,7 +25,7 @@ func TestNewPickerIncludesCurrentNotInCandidates(t *testing.T) {
 	// "bug" is currently applied but no longer in the candidate list; it must
 	// still appear (selected) so enter does not silently remove it.
 	p := newPicker(pickLabels, "Labels", []string{"wip"}, nil, []string{"bug"})
-	names := make([]string, 0, len(p.items))
+	var names []string
 	for _, it := range p.items {
 		names = append(names, it.name)
 	}
