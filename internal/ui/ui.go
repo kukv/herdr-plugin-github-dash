@@ -290,12 +290,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case prDetailMsg:
 		m.detailLoading = false
 		m.detailState = msg.State
+		m.actionErr = ""
 		m.detailTitle = fmt.Sprintf("PR #%d %s", msg.Number, msg.Title)
 		m.setDetailContent(prMarkdown(ghcli.PR(msg)))
 		return m, nil
 	case issueDetailMsg:
 		m.detailLoading = false
 		m.detailState = msg.State
+		m.actionErr = ""
 		m.detailTitle = fmt.Sprintf("Issue #%d %s", msg.Number, msg.Title)
 		m.setDetailContent(issueMarkdown(ghcli.Issue(msg)))
 		return m, nil
