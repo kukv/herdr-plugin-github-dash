@@ -1,4 +1,4 @@
-.PHONY: fmt fmt-check lint test check
+.PHONY: fmt fmt-check lint tidy-check test check
 
 # Auto-format the code (gofumpt + goimports via golangci-lint).
 fmt:
@@ -12,9 +12,14 @@ fmt-check:
 lint:
 	golangci-lint run ./...
 
+# Fail if go.mod/go.sum are not tidy (mirrors the CI module-hygiene gate).
+tidy-check:
+	go mod tidy
+	git diff --exit-code -- go.mod go.sum
+
 # Run tests with the race detector and coverage (mirrors the CI test step).
 test:
 	gotestsum --format testdox -- -race -coverprofile=coverage.out -covermode=atomic ./...
 
 # Run everything the CI checks, locally.
-check: lint fmt-check test
+check: tidy-check lint fmt-check test
