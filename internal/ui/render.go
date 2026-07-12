@@ -64,16 +64,27 @@ func (m Model) detailView() string {
 	if m.confirming {
 		return m.confirmView()
 	}
-	if m.detailLoading {
+	if m.picking {
+		return m.pickerView()
+	}
+	if m.detailLoading || m.pickerLoading {
 		return m.spin.View() + " loading...\n"
 	}
 	header := titleStyle.Render(m.detailTitle)
-	footer := dimStyle.Render("j/k:scroll  r:refresh  o:browser  c:comment  " + m.stateFooterKey() + "esc:back")
+	footer := dimStyle.Render("j/k:scroll  r:refresh  o:browser  c:comment  " + m.stateFooterKey() + "l:labels  a:assign  esc:back")
 	body := header + "\n" + m.detail.View() + "\n"
 	if m.actionErr != "" {
 		body += "error: " + m.actionErr + "\n"
 	}
 	return body + footer
+}
+
+func (m Model) pickerView() string {
+	body := m.picker.listView(m.height)
+	if m.applying {
+		return body + "\n" + m.spin.View() + " applying...\n"
+	}
+	return body + "\n" + dimStyle.Render("space:toggle  enter:apply  esc:cancel")
 }
 
 // stateFooterKey returns the state-aware footer hint (with trailing spaces),

@@ -25,6 +25,13 @@ type fakeSource struct {
 
 	stateCalls []string // "close:pr:<repo>:<n>" 等の action:kind:repo:number
 	stateErr   error
+
+	labels    []ghcli.Label
+	users     []string
+	editCalls []string // "pr:labels::12:add=bug:remove=wip"
+	labelsErr error
+	usersErr  error
+	editErr   error
 }
 
 func (f *fakeSource) ListPRs() ([]ghcli.PR, error)       { return f.prs, f.err }
@@ -69,6 +76,29 @@ func (f *fakeSource) ReopenIssue(repo string, n int) error {
 	return f.stateErr
 }
 
+func (f *fakeSource) ListLabels(repo string) ([]ghcli.Label, error) { return f.labels, f.labelsErr }
+func (f *fakeSource) ListAssignees(repo string) ([]string, error)   { return f.users, f.usersErr }
+func (f *fakeSource) EditPRLabels(repo string, n int, add, remove []string) error {
+	f.editCalls = append(f.editCalls, "pr:labels:"+repo+":"+itoa(n)+editSuffix(add, remove))
+	return f.editErr
+}
+func (f *fakeSource) EditIssueLabels(repo string, n int, add, remove []string) error {
+	f.editCalls = append(f.editCalls, "issue:labels:"+repo+":"+itoa(n)+editSuffix(add, remove))
+	return f.editErr
+}
+func (f *fakeSource) EditPRAssignees(repo string, n int, add, remove []string) error {
+	f.editCalls = append(f.editCalls, "pr:assignees:"+repo+":"+itoa(n)+editSuffix(add, remove))
+	return f.editErr
+}
+func (f *fakeSource) EditIssueAssignees(repo string, n int, add, remove []string) error {
+	f.editCalls = append(f.editCalls, "issue:assignees:"+repo+":"+itoa(n)+editSuffix(add, remove))
+	return f.editErr
+}
+
+func editSuffix(add, remove []string) string {
+	return ":add=" + strings.Join(add, ",") + ":remove=" + strings.Join(remove, ",")
+}
+
 func itoa(n int) string { return string(rune('0' + n)) } // テスト内は n < 10 のみ
 
 func samplePRs() []ghcli.PR {
@@ -92,6 +122,8 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyCtrlS}
 	case "ctrl+c":
 		return tea.KeyMsg{Type: tea.KeyCtrlC}
+	case "space":
+		return tea.KeyMsg{Type: tea.KeySpace}
 	default:
 		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 	}
@@ -821,5 +853,312 @@ func TestConfirmCtrlCQuitsWhileWorking(t *testing.T) {
 	}
 	if _, ok := cmd().(tea.QuitMsg); !ok {
 		t.Errorf("msg = %T, want tea.QuitMsg", cmd())
+	}
+}
+
+func TestLOpensLabelPickerPrechecked(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+	m := detailModel(f)
+	next, cmd := m.Update(key("l"))
+	m = next.(Model)
+	if !m.pickerLoading || cmd == nil {
+		t.Fatalf("pickerLoading = %v, cmd = %v; want loading with fetch cmd", m.pickerLoading, cmd)
+	}
+	next, _ = m.Update(cmd()) // pickerCandidatesMsg
+	m = next.(Model)
+	if !m.picking || m.pickerLoading {
+		t.Fatalf("picking = %v, pickerLoading = %v; want picking", m.picking, m.pickerLoading)
+	}
+	if m.picker.kind != pickLabels || len(m.picker.items) != 2 {
+		t.Fatalf("picker = %+v, want 2 label items", m.picker)
+	}
+	if !m.picker.items[0].selected { // "bug" precheck
+		t.Errorf("current label not prechecked: %+v", m.picker.items)
+	}
+}
+
+func TestAOpensAssigneePicker(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:    ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		users: []string{"alice", "bob"}}
+	m := detailModel(f)
+	next, cmd := m.Update(key("a"))
+	m = next.(Model)
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	if !m.picking || m.picker.kind != pickAssignees || len(m.picker.items) != 2 {
+		t.Fatalf("picker = %+v, want 2 assignee items", m.picker)
+	}
+}
+
+func TestPickerApplyComputesDiffAndRefetches(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+	m := detailModel(f)
+	next, cmd := m.Update(key("l"))
+	m = next.(Model)
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	// toggle bug off (cursor 0), move to wip, toggle on
+	next, _ = m.Update(key("space"))
+	m = next.(Model)
+	next, _ = m.Update(key("j"))
+	m = next.(Model)
+	next, _ = m.Update(key("space"))
+	m = next.(Model)
+	next, cmd = m.Update(key("enter"))
+	m = next.(Model)
+	if !m.applying || cmd == nil {
+		t.Fatalf("applying = %v, cmd = %v; want applying with edit cmd", m.applying, cmd)
+	}
+	msg := cmd()
+	if _, ok := msg.(pickerAppliedMsg); !ok {
+		t.Fatalf("msg = %T, want pickerAppliedMsg", msg)
+	}
+	if len(f.editCalls) != 1 || f.editCalls[0] != "pr:labels::1:add=wip:remove=bug" {
+		t.Fatalf("editCalls = %v, want [pr:labels::1:add=wip:remove=bug]", f.editCalls)
+	}
+	next, cmd = m.Update(msg)
+	m = next.(Model)
+	if m.picking || m.applying || !m.detailLoading || cmd == nil {
+		t.Errorf("after applied: picking=%v applying=%v detailLoading=%v cmd=%v; want false,false,true,non-nil",
+			m.picking, m.applying, m.detailLoading, cmd)
+	}
+}
+
+func TestPickerNoChangeClosesWithoutEdit(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+	m := detailModel(f)
+	next, cmd := m.Update(key("l"))
+	m = next.(Model)
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	next, cmd = m.Update(key("enter")) // no toggle
+	m = next.(Model)
+	if m.picking {
+		t.Errorf("picking = true, want closed after empty-diff enter")
+	}
+	if cmd != nil {
+		t.Errorf("cmd = non-nil, want nil for empty diff")
+	}
+	if len(f.editCalls) != 0 {
+		t.Errorf("editCalls = %v, want none", f.editCalls)
+	}
+}
+
+func TestPickerEscCancels(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+	m := detailModel(f)
+	next, cmd := m.Update(key("l"))
+	m = next.(Model)
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	next, _ = m.Update(key("space")) // change something
+	m = next.(Model)
+	next, _ = m.Update(key("esc"))
+	m = next.(Model)
+	if m.picking {
+		t.Errorf("picking = true after esc, want false")
+	}
+	if len(f.editCalls) != 0 {
+		t.Errorf("editCalls = %v, want none after esc", f.editCalls)
+	}
+}
+
+func TestPickerApplyErrorKeepsPicker(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:      ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
+		labels:  []ghcli.Label{{Name: "bug"}, {Name: "wip"}},
+		editErr: errors.New("gh pr: HTTP 403 forbidden")}
+	m := detailModel(f)
+	next, cmd := m.Update(key("l"))
+	m = next.(Model)
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	next, _ = m.Update(key("space")) // toggle bug off -> a diff
+	m = next.(Model)
+	next, cmd = m.Update(key("enter"))
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // pickErrorMsg
+	m = next.(Model)
+	if !m.picking {
+		t.Errorf("picking = false, want still picking after apply error")
+	}
+	if m.applying {
+		t.Errorf("applying = true, want false after error")
+	}
+	if !strings.Contains(m.picker.err, "403") {
+		t.Errorf("picker.err = %q, want to contain 403", m.picker.err)
+	}
+}
+
+func TestPickerFetchErrorInlineOnDetail(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:        ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		labelsErr: errors.New("gh label: HTTP 403 forbidden")}
+	m := detailModel(f)
+	next, cmd := m.Update(key("l"))
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // pickErrorMsg (picking was never set)
+	m = next.(Model)
+	if m.picking || m.pickerLoading {
+		t.Errorf("picking/pickerLoading = %v/%v, want false", m.picking, m.pickerLoading)
+	}
+	if m.screen != screenDetail {
+		t.Errorf("screen = %v, want screenDetail", m.screen)
+	}
+	if !strings.Contains(m.actionErr, "403") {
+		t.Errorf("actionErr = %q, want to contain 403", m.actionErr)
+	}
+}
+
+func TestPickerApplyOnIssueRoutesToIssue(t *testing.T) {
+	f := &fakeSource{
+		issues: []ghcli.Issue{{Number: 5, Title: "an issue"}},
+		issue:  ghcli.Issue{Number: 5, Title: "an issue", State: "OPEN"},
+		labels: []ghcli.Label{{Name: "bug"}},
+	}
+	m := New(f, nil)
+	next, cmd := m.Update(key("tab")) // -> Issues
+	m = next.(Model)
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	next, cmd = m.Update(key("enter"))
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // issueDetailMsg
+	m = next.(Model)
+	next, cmd = m.Update(key("l"))
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // pickerCandidatesMsg
+	m = next.(Model)
+	next, _ = m.Update(key("space")) // add bug
+	m = next.(Model)
+	next, cmd = m.Update(key("enter"))
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("cmd = nil, want edit cmd")
+	}
+	cmd()
+	if len(f.editCalls) != 1 || f.editCalls[0] != "issue:labels::5:add=bug:remove=" {
+		t.Errorf("editCalls = %v, want [issue:labels::5:add=bug:remove=]", f.editCalls)
+	}
+}
+
+func TestPickerLoadingIgnoresKeys(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+	m := detailModel(f)
+	next, _ := m.Update(key("l"))
+	m = next.(Model)
+	if !m.pickerLoading {
+		t.Fatalf("pickerLoading = false, want true right after pressing l")
+	}
+	next, cmd := m.Update(key("x")) // fetch still in flight; must be a no-op
+	m = next.(Model)
+	if cmd != nil {
+		t.Errorf("cmd = %v, want nil while pickerLoading", cmd)
+	}
+	if m.confirming || m.composing || m.picking {
+		t.Errorf("confirming=%v composing=%v picking=%v, want all false while pickerLoading",
+			m.confirming, m.composing, m.picking)
+	}
+	if m.screen != screenDetail {
+		t.Errorf("screen = %v, want screenDetail", m.screen)
+	}
+}
+
+func TestPickerLoadingCtrlCQuits(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+	m := detailModel(f)
+	next, _ := m.Update(key("l"))
+	m = next.(Model)
+	next, cmd := m.Update(key("ctrl+c"))
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("cmd = nil, want tea.Quit while pickerLoading")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Errorf("cmd() = %T, want tea.QuitMsg", cmd())
+	}
+}
+
+func TestPickerApplyAssigneesRoutesToPR(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:    ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		users: []string{"alice"}}
+	m := detailModel(f)
+	next, cmd := m.Update(key("a"))
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // pickerCandidatesMsg
+	m = next.(Model)
+	next, _ = m.Update(key("space")) // select alice -> add
+	m = next.(Model)
+	next, cmd = m.Update(key("enter"))
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("cmd = nil, want edit cmd")
+	}
+	cmd()
+	if len(f.editCalls) != 1 || f.editCalls[0] != "pr:assignees::1:add=alice:remove=" {
+		t.Errorf("editCalls = %v, want [pr:assignees::1:add=alice:remove=]", f.editCalls)
+	}
+}
+
+func TestPickerViewShowsItemsAndHelp(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+	m := detailModel(f)
+	next, cmd := m.Update(key("l"))
+	m = next.(Model)
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	view := m.View()
+	for _, want := range []string{"Labels", "[x] bug", "[ ] wip", "space:toggle", "enter:apply", "esc:cancel"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("picker view missing %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestPickerViewShowsApplyError(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:      ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
+		labels:  []ghcli.Label{{Name: "bug"}, {Name: "wip"}},
+		editErr: errors.New("gh pr: HTTP 403 forbidden")}
+	m := detailModel(f)
+	next, cmd := m.Update(key("l"))
+	m = next.(Model)
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	next, _ = m.Update(key("space"))
+	m = next.(Model)
+	next, cmd = m.Update(key("enter"))
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // pickErrorMsg
+	m = next.(Model)
+	if !strings.Contains(m.View(), "403") {
+		t.Errorf("picker view missing error text:\n%s", m.View())
+	}
+}
+
+func TestDetailFooterShowsLabelAssignKeys(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"}}
+	m := detailModel(f)
+	view := m.View()
+	for _, want := range []string{"l:labels", "a:assign"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("detail footer missing %q:\n%s", want, view)
+		}
 	}
 }

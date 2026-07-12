@@ -45,6 +45,8 @@ without a keybinding via `herdr plugin action invoke open --plugin kukv.github-d
 | `o` | open in browser | open in browser |
 | `c` | — | comment (`Ctrl+S` send / `Esc` cancel) |
 | `x` | — | close / reopen (`y` confirm / `n` cancel) |
+| `l` | — | edit labels (`space` toggle / `enter` apply) |
+| `a` | — | edit assignees (`space` toggle / `enter` apply) |
 | `esc` | — | back to list |
 | `q` | quit | back to list |
 

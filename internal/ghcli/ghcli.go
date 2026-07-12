@@ -13,9 +13,9 @@ import (
 
 const (
 	prListFields    = "number,title,author,state,isDraft,updatedAt,reviewDecision,url"
-	prViewFields    = prListFields + ",body,comments,labels"
+	prViewFields    = prListFields + ",body,comments,labels,assignees"
 	issueListFields = "number,title,author,state,updatedAt,labels,url"
-	issueViewFields = issueListFields + ",body,comments"
+	issueViewFields = issueListFields + ",body,comments,assignees"
 )
 
 // ErrGhNotFound is returned when the gh binary is not on PATH.
@@ -48,6 +48,7 @@ type PR struct {
 	Body           string    `json:"body"`
 	Comments       []Comment `json:"comments"`
 	Labels         []Label   `json:"labels"`
+	Assignees      []Author  `json:"assignees"`
 }
 
 type Issue struct {
@@ -60,6 +61,7 @@ type Issue struct {
 	Body      string    `json:"body"`
 	Comments  []Comment `json:"comments"`
 	Labels    []Label   `json:"labels"`
+	Assignees []Author  `json:"assignees"`
 }
 
 type runFunc func(dir string, args ...string) ([]byte, error)
@@ -201,4 +203,68 @@ func (c *Client) CloseIssue(repo string, number int) error {
 func (c *Client) ReopenIssue(repo string, number int) error {
 	_, err := c.run(c.dir, appendRepo([]string{"issue", "reopen", strconv.Itoa(number)}, repo)...)
 	return err
+}
+
+func (c *Client) ListLabels(repo string) ([]Label, error) {
+	args := appendRepo([]string{"label", "list", "--json", "name,color", "--limit", "100"}, repo)
+	out, err := c.run(c.dir, args...)
+	if err != nil {
+		return nil, err
+	}
+	var labels []Label
+	if err := json.Unmarshal(out, &labels); err != nil {
+		return nil, fmt.Errorf("parse label list: %w", err)
+	}
+	return labels, nil
+}
+
+// ListAssignees returns the logins of users assignable on the repository.
+// gh api substitutes {owner}/{repo} from the current directory's repo; for an
+// override we build the explicit path (gh api takes no --repo).
+func (c *Client) ListAssignees(repo string) ([]string, error) {
+	path := "repos/{owner}/{repo}/assignees?per_page=100"
+	if repo != "" {
+		path = "repos/" + repo + "/assignees?per_page=100"
+	}
+	out, err := c.run(c.dir, "api", path)
+	if err != nil {
+		return nil, err
+	}
+	var users []Author
+	if err := json.Unmarshal(out, &users); err != nil {
+		return nil, fmt.Errorf("parse assignees: %w", err)
+	}
+	logins := make([]string, len(users))
+	for i, u := range users {
+		logins[i] = u.Login
+	}
+	return logins, nil
+}
+
+func (c *Client) editItems(kindCmd, repo string, number int, add, remove []string, addFlag, removeFlag string) error {
+	args := []string{kindCmd, "edit", strconv.Itoa(number)}
+	for _, v := range add {
+		args = append(args, addFlag, v)
+	}
+	for _, v := range remove {
+		args = append(args, removeFlag, v)
+	}
+	_, err := c.run(c.dir, appendRepo(args, repo)...)
+	return err
+}
+
+func (c *Client) EditPRLabels(repo string, number int, add, remove []string) error {
+	return c.editItems("pr", repo, number, add, remove, "--add-label", "--remove-label")
+}
+
+func (c *Client) EditIssueLabels(repo string, number int, add, remove []string) error {
+	return c.editItems("issue", repo, number, add, remove, "--add-label", "--remove-label")
+}
+
+func (c *Client) EditPRAssignees(repo string, number int, add, remove []string) error {
+	return c.editItems("pr", repo, number, add, remove, "--add-assignee", "--remove-assignee")
+}
+
+func (c *Client) EditIssueAssignees(repo string, number int, add, remove []string) error {
+	return c.editItems("issue", repo, number, add, remove, "--add-assignee", "--remove-assignee")
 }

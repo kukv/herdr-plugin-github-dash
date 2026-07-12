@@ -226,3 +226,96 @@ func TestStateChangeError(t *testing.T) {
 		t.Errorf("err = %v, want %v", err, wantErr)
 	}
 }
+
+func TestListLabels(t *testing.T) {
+	c, f := newTestClient(`[{"name":"bug","color":"d73a4a"},{"name":"wip","color":"ededed"}]`, nil)
+	labels, err := c.ListLabels("")
+	if err != nil {
+		t.Fatalf("ListLabels: %v", err)
+	}
+	wantArgs := []string{"label", "list", "--json", "name,color", "--limit", "100"}
+	if !reflect.DeepEqual(f.args, wantArgs) {
+		t.Errorf("args = %v, want %v", f.args, wantArgs)
+	}
+	if len(labels) != 2 || labels[0].Name != "bug" || labels[0].Color != "d73a4a" || labels[1].Name != "wip" {
+		t.Errorf("unexpected parse result: %+v", labels)
+	}
+}
+
+func TestListAssignees(t *testing.T) {
+	c, f := newTestClient(`[{"login":"alice"},{"login":"bob"}]`, nil)
+	users, err := c.ListAssignees("")
+	if err != nil {
+		t.Fatalf("ListAssignees: %v", err)
+	}
+	wantArgs := []string{"api", "repos/{owner}/{repo}/assignees?per_page=100"}
+	if !reflect.DeepEqual(f.args, wantArgs) {
+		t.Errorf("args = %v, want %v", f.args, wantArgs)
+	}
+	if len(users) != 2 || users[0] != "alice" || users[1] != "bob" {
+		t.Errorf("unexpected parse result: %v", users)
+	}
+}
+
+func TestListAssigneesWithRepoOverride(t *testing.T) {
+	c, f := newTestClient(`[]`, nil)
+	if _, err := c.ListAssignees("octo/hello"); err != nil {
+		t.Fatalf("ListAssignees: %v", err)
+	}
+	wantArgs := []string{"api", "repos/octo/hello/assignees?per_page=100"}
+	if !reflect.DeepEqual(f.args, wantArgs) {
+		t.Errorf("args = %v, want %v", f.args, wantArgs)
+	}
+}
+
+func TestGetPRParsesAssignees(t *testing.T) {
+	c, _ := newTestClient(`{"number":12,"title":"t","assignees":[{"login":"alice"},{"login":"bob"}]}`, nil)
+	pr, err := c.GetPR("", 12)
+	if err != nil {
+		t.Fatalf("GetPR: %v", err)
+	}
+	if len(pr.Assignees) != 2 || pr.Assignees[0].Login != "alice" || pr.Assignees[1].Login != "bob" {
+		t.Errorf("unexpected assignees: %+v", pr.Assignees)
+	}
+}
+
+func TestEditPRLabels(t *testing.T) {
+	c, f := newTestClient("", nil)
+	if err := c.EditPRLabels("", 12, []string{"bug"}, []string{"wip"}); err != nil {
+		t.Fatalf("EditPRLabels: %v", err)
+	}
+	wantArgs := []string{"pr", "edit", "12", "--add-label", "bug", "--remove-label", "wip"}
+	if !reflect.DeepEqual(f.args, wantArgs) {
+		t.Errorf("args = %v, want %v", f.args, wantArgs)
+	}
+}
+
+func TestEditPRLabelsAddOnly(t *testing.T) {
+	c, f := newTestClient("", nil)
+	if err := c.EditPRLabels("", 12, []string{"a", "b"}, nil); err != nil {
+		t.Fatalf("EditPRLabels: %v", err)
+	}
+	wantArgs := []string{"pr", "edit", "12", "--add-label", "a", "--add-label", "b"}
+	if !reflect.DeepEqual(f.args, wantArgs) {
+		t.Errorf("args = %v, want %v", f.args, wantArgs)
+	}
+}
+
+func TestEditIssueAssigneesWithRepoOverride(t *testing.T) {
+	c, f := newTestClient("", nil)
+	if err := c.EditIssueAssignees("octo/hello", 3, []string{"alice"}, []string{"bob"}); err != nil {
+		t.Fatalf("EditIssueAssignees: %v", err)
+	}
+	wantArgs := []string{"issue", "edit", "3", "--add-assignee", "alice", "--remove-assignee", "bob", "--repo", "octo/hello"}
+	if !reflect.DeepEqual(f.args, wantArgs) {
+		t.Errorf("args = %v, want %v", f.args, wantArgs)
+	}
+}
+
+func TestEditItemsError(t *testing.T) {
+	wantErr := errors.New("gh pr: HTTP 403 forbidden")
+	c, _ := newTestClient("", wantErr)
+	if err := c.EditPRLabels("", 12, []string{"bug"}, nil); !errors.Is(err, wantErr) {
+		t.Errorf("err = %v, want %v", err, wantErr)
+	}
+}
