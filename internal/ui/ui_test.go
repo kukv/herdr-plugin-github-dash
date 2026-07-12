@@ -1050,3 +1050,66 @@ func TestPickerApplyOnIssueRoutesToIssue(t *testing.T) {
 		t.Errorf("editCalls = %v, want [issue:labels::5:add=bug:remove=]", f.editCalls)
 	}
 }
+
+func TestPickerLoadingIgnoresKeys(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+	m := detailModel(f)
+	next, _ := m.Update(key("l"))
+	m = next.(Model)
+	if !m.pickerLoading {
+		t.Fatalf("pickerLoading = false, want true right after pressing l")
+	}
+	next, cmd := m.Update(key("x")) // fetch still in flight; must be a no-op
+	m = next.(Model)
+	if cmd != nil {
+		t.Errorf("cmd = %v, want nil while pickerLoading", cmd)
+	}
+	if m.confirming || m.composing || m.picking {
+		t.Errorf("confirming=%v composing=%v picking=%v, want all false while pickerLoading",
+			m.confirming, m.composing, m.picking)
+	}
+	if m.screen != screenDetail {
+		t.Errorf("screen = %v, want screenDetail", m.screen)
+	}
+}
+
+func TestPickerLoadingCtrlCQuits(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+	m := detailModel(f)
+	next, _ := m.Update(key("l"))
+	m = next.(Model)
+	next, cmd := m.Update(key("ctrl+c"))
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("cmd = nil, want tea.Quit while pickerLoading")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Errorf("cmd() = %T, want tea.QuitMsg", cmd())
+	}
+}
+
+func TestPickerApplyAssigneesRoutesToPR(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:    ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		users: []string{"alice"}}
+	m := detailModel(f)
+	next, cmd := m.Update(key("a"))
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // pickerCandidatesMsg
+	m = next.(Model)
+	next, _ = m.Update(key("space")) // select alice -> add
+	m = next.(Model)
+	next, cmd = m.Update(key("enter"))
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("cmd = nil, want edit cmd")
+	}
+	cmd()
+	if len(f.editCalls) != 1 || f.editCalls[0] != "pr:assignees::1:add=alice:remove=" {
+		t.Errorf("editCalls = %v, want [pr:assignees::1:add=alice:remove=]", f.editCalls)
+	}
+}

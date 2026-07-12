@@ -548,6 +548,12 @@ func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.picking {
 		return m.handlePickerKey(msg)
 	}
+	if m.pickerLoading {
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+		return m, nil // 候補取得中は他のキーを無視する
+	}
 	switch msg.String() {
 	case "q", "esc":
 		return m.enterList()
