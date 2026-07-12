@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/glamour/v2"
 
 	"github.com/kukv/herdr-plugin-github-dash/internal/ghcli"
 )
@@ -137,7 +137,7 @@ func New(src DataSource, initial *Target) Model {
 		src:      src,
 		spin:     s,
 		screen:   screenList,
-		detail:   viewport.New(80, 20),
+		detail:   viewport.New(viewport.WithWidth(80), viewport.WithHeight(20)),
 		textarea: ta,
 	}
 	if initial != nil {
@@ -150,9 +150,16 @@ func New(src DataSource, initial *Target) Model {
 	return m
 }
 
-// NewError builds a model that only shows an error message.
+// NewError builds a model that only shows an error message. It still constructs
+// the detail viewport and textarea because the shared WindowSizeMsg handler
+// resizes them, and v2's zero-value widgets panic on SetWidth.
 func NewError(text string) Model {
-	return Model{screen: screenError, errText: text}
+	return Model{
+		screen:   screenError,
+		errText:  text,
+		detail:   viewport.New(viewport.WithWidth(80), viewport.WithHeight(20)),
+		textarea: textarea.New(),
+	}
 }
 
 func (m Model) Init() tea.Cmd {
@@ -319,8 +326,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.detail.Width = msg.Width
-		m.detail.Height = max(msg.Height-4, 5)
+		m.detail.SetWidth(msg.Width)
+		m.detail.SetHeight(max(msg.Height-4, 5))
 		m.textarea.SetWidth(msg.Width)
 		m.textarea.SetHeight(max(msg.Height-6, 3))
 		return m, nil
@@ -695,7 +702,7 @@ func (m *Model) setDetailContent(md string) {
 		width = 80
 	}
 	content := md
-	if r, err := glamour.NewTermRenderer(glamour.WithAutoStyle(),
+	if r, err := glamour.NewTermRenderer(glamour.WithStandardStyle("dark"),
 		glamour.WithWordWrap(width-2)); err == nil {
 		if out, err := r.Render(md); err == nil {
 			content = out
@@ -705,13 +712,17 @@ func (m *Model) setDetailContent(md string) {
 	m.detail.GotoTop()
 }
 
-func (m Model) View() string {
+func (m Model) View() tea.View {
+	var content string
 	switch m.screen {
 	case screenError:
-		return errorView(m.errText)
+		content = errorView(m.errText)
 	case screenDetail:
-		return m.detailView()
+		content = m.detailView()
 	default:
-		return m.listView()
+		content = m.listView()
 	}
+	v := tea.NewView(content)
+	v.AltScreen = true // v1 の tea.WithAltScreen() 相当
+	return v
 }

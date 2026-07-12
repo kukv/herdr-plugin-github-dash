@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/kukv/herdr-plugin-github-dash/internal/ghcli"
 )
@@ -128,19 +129,19 @@ func samplePRs() []ghcli.PR {
 func key(s string) tea.KeyMsg {
 	switch s {
 	case "tab":
-		return tea.KeyMsg{Type: tea.KeyTab}
+		return tea.KeyPressMsg{Code: tea.KeyTab}
 	case "enter":
-		return tea.KeyMsg{Type: tea.KeyEnter}
+		return tea.KeyPressMsg{Code: tea.KeyEnter}
 	case "esc":
-		return tea.KeyMsg{Type: tea.KeyEsc}
+		return tea.KeyPressMsg{Code: tea.KeyEscape}
 	case "ctrl+s":
-		return tea.KeyMsg{Type: tea.KeyCtrlS}
+		return tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}
 	case "ctrl+c":
-		return tea.KeyMsg{Type: tea.KeyCtrlC}
+		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 	case "space":
-		return tea.KeyMsg{Type: tea.KeySpace}
+		return tea.KeyPressMsg{Code: tea.KeySpace}
 	default:
-		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
+		return tea.KeyPressMsg{Code: []rune(s)[0], Text: s}
 	}
 }
 
@@ -163,7 +164,7 @@ func detailModel(f *fakeSource) Model {
 func TestPRListRenders(t *testing.T) {
 	f := &fakeSource{prs: samplePRs()}
 	m := loadedModel(f)
-	view := m.View()
+	view := m.View().Content
 	for _, want := range []string{"first pr", "second pr", "@kukv", "#1"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("view missing %q:\n%s", want, view)
@@ -174,8 +175,8 @@ func TestPRListRenders(t *testing.T) {
 func TestEmptyPRList(t *testing.T) {
 	f := &fakeSource{}
 	m := loadedModel(f)
-	if !strings.Contains(m.View(), "No open pull requests") {
-		t.Errorf("view missing empty state:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "No open pull requests") {
+		t.Errorf("view missing empty state:\n%s", m.View().Content)
 	}
 }
 
@@ -206,8 +207,8 @@ func TestTabSwitchLoadsIssues(t *testing.T) {
 	}
 	next, _ = m.Update(cmd()) // fetch を同期実行して結果を流し込む
 	m = next.(Model)
-	if !strings.Contains(m.View(), "an issue") {
-		t.Errorf("view missing issue:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "an issue") {
+		t.Errorf("view missing issue:\n%s", m.View().Content)
 	}
 }
 
@@ -228,12 +229,25 @@ func TestErrorMsgShowsErrorScreen(t *testing.T) {
 	m := loadedModel(f)
 	next, _ := m.Update(errorMsg{errors.New("gh pr: no git remotes found")})
 	m = next.(Model)
-	if !strings.Contains(m.View(), "no git remotes found") {
-		t.Errorf("view missing error text:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "no git remotes found") {
+		t.Errorf("view missing error text:\n%s", m.View().Content)
 	}
 	_, cmd := m.Update(key("q"))
 	if cmd == nil {
 		t.Fatal("q on error screen should quit")
+	}
+}
+
+// TestErrorModelHandlesWindowSize guards the NewError path: bubbletea sends an
+// initial WindowSizeMsg on startup, and the resize handler touches the detail
+// viewport and textarea. NewError must construct those widgets (like New does)
+// or SetWidth dereferences an uninitialized internal viewport and panics.
+func TestErrorModelHandlesWindowSize(t *testing.T) {
+	m := NewError("boom")
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = next.(Model)
+	if !strings.Contains(m.View().Content, "boom") {
+		t.Errorf("error view missing text after resize:\n%s", m.View().Content)
 	}
 }
 
@@ -268,7 +282,8 @@ func TestEnterOpensDetailAndEscReturns(t *testing.T) {
 	}
 	next, _ = m.Update(cmd())
 	m = next.(Model)
-	view := m.View()
+	// glamour v2 はセル単位でスタイルを付けるため、本文は ANSI を除去して検証する
+	view := ansi.Strip(m.View().Content)
 	for _, want := range []string{"first pr", "the body text", "a comment"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("detail view missing %q:\n%s", want, view)
@@ -289,8 +304,8 @@ func TestDirectModeStartsOnDetailWithRepo(t *testing.T) {
 	}
 	next, _ := m.Update(fetchDetail(f, m.detailTarget)())
 	m = next.(Model)
-	if !strings.Contains(m.View(), "external pr") {
-		t.Errorf("view missing detail:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "external pr") {
+		t.Errorf("view missing detail:\n%s", m.View().Content)
 	}
 	// o キーは Repo を引き継いでブラウザを開く
 	_, cmd := m.Update(key("o"))
@@ -341,19 +356,19 @@ func TestRefreshThenTabSwitchClearsCorrectLoading(t *testing.T) {
 	if tabCmd != nil {
 		t.Fatalf("switching to an already-loaded tab issued cmd = %v, want nil", tabCmd)
 	}
-	if view := m.View(); strings.Contains(view, "loading...") || !strings.Contains(view, "an issue") {
+	if view := m.View().Content; strings.Contains(view, "loading...") || !strings.Contains(view, "an issue") {
 		t.Errorf("Issues view should render items immediately, got:\n%s", view)
 	}
 
 	next, _ = m.Update(refreshCmd()) // late prListMsg arrives while Issues is visible
 	m = next.(Model)
-	if view := m.View(); strings.Contains(view, "loading...") || !strings.Contains(view, "an issue") {
+	if view := m.View().Content; strings.Contains(view, "loading...") || !strings.Contains(view, "an issue") {
 		t.Errorf("Issues view got stuck on spinner after late prListMsg, got:\n%s", view)
 	}
 
 	next, _ = m.Update(key("tab")) // switch back to PRs
 	m = next.(Model)
-	if view := m.View(); strings.Contains(view, "loading...") || !strings.Contains(view, "first pr") {
+	if view := m.View().Content; strings.Contains(view, "loading...") || !strings.Contains(view, "first pr") {
 		t.Errorf("PRs view stuck on spinner or missing refreshed items, got:\n%s", view)
 	}
 }
@@ -379,13 +394,13 @@ func TestRefreshThenEnterKeepsDetailSpinner(t *testing.T) {
 
 	next, _ = m.Update(refreshCmd()) // late prListMsg arrives while detail is loading
 	m = next.(Model)
-	if view := m.View(); !strings.Contains(view, "loading...") {
+	if view := m.View().Content; !strings.Contains(view, "loading...") {
 		t.Errorf("detail view lost its spinner after late prListMsg, got:\n%s", view)
 	}
 
 	next, _ = m.Update(detailCmd()) // detail fetch finally resolves
 	m = next.(Model)
-	if view := m.View(); !strings.Contains(view, "first pr") {
+	if view := m.View().Content; !strings.Contains(view, "first pr") {
 		t.Errorf("detail view missing content after detail fetch resolved, got:\n%s", view)
 	}
 }
@@ -496,7 +511,7 @@ func TestComposeViewShowsTextareaAndHelp(t *testing.T) {
 	next, _ := m.Update(key("c"))
 	m = next.(Model)
 	m.textarea.SetValue("my comment")
-	view := m.View()
+	view := m.View().Content
 	for _, want := range []string{"my comment", "ctrl+s:send", "esc:cancel"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("compose view missing %q:\n%s", want, view)
@@ -517,8 +532,8 @@ func TestComposeViewShowsPostError(t *testing.T) {
 	m = next.(Model)
 	next, _ = m.Update(cmd())
 	m = next.(Model)
-	if !strings.Contains(m.View(), "403") {
-		t.Errorf("compose view missing error text:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "403") {
+		t.Errorf("compose view missing error text:\n%s", m.View().Content)
 	}
 }
 
@@ -732,7 +747,7 @@ func TestConfirmViewShowsPrompt(t *testing.T) {
 	m := detailModel(f)
 	next, _ := m.Update(key("x"))
 	m = next.(Model)
-	view := m.View()
+	view := m.View().Content
 	for _, want := range []string{"Close", "(y/n)"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("confirm view missing %q:\n%s", want, view)
@@ -745,16 +760,16 @@ func TestConfirmViewReopenWording(t *testing.T) {
 	m := detailModel(f)
 	next, _ := m.Update(key("x"))
 	m = next.(Model)
-	if !strings.Contains(m.View(), "Reopen") {
-		t.Errorf("confirm view missing Reopen wording:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "Reopen") {
+		t.Errorf("confirm view missing Reopen wording:\n%s", m.View().Content)
 	}
 }
 
 func TestDetailFooterShowsStateKey(t *testing.T) {
 	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"}}
 	m := detailModel(f)
-	if !strings.Contains(m.View(), "x:close") {
-		t.Errorf("detail footer missing x:close for open item:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "x:close") {
+		t.Errorf("detail footer missing x:close for open item:\n%s", m.View().Content)
 	}
 }
 
@@ -770,8 +785,8 @@ func TestStateErrorShownInline(t *testing.T) {
 	m = next.(Model)
 	next, _ = m.Update(cmd())
 	m = next.(Model)
-	if !strings.Contains(m.View(), "403") {
-		t.Errorf("detail view missing inline error:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "403") {
+		t.Errorf("detail view missing inline error:\n%s", m.View().Content)
 	}
 }
 
@@ -808,8 +823,8 @@ func TestActionErrClearedOnReload(t *testing.T) {
 	if m.actionErr != "" {
 		t.Errorf("actionErr = %q after reload, want empty", m.actionErr)
 	}
-	if strings.Contains(m.View(), "403") {
-		t.Errorf("view still shows stale error after reload:\n%s", m.View())
+	if strings.Contains(m.View().Content, "403") {
+		t.Errorf("view still shows stale error after reload:\n%s", m.View().Content)
 	}
 }
 
@@ -1173,7 +1188,7 @@ func TestPickerViewShowsItemsAndHelp(t *testing.T) {
 	m = next.(Model)
 	next, _ = m.Update(cmd())
 	m = next.(Model)
-	view := m.View()
+	view := m.View().Content
 	for _, want := range []string{"Labels", "[x] bug", "[ ] wip", "space:toggle", "enter:apply", "esc:cancel"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("picker view missing %q:\n%s", want, view)
@@ -1199,15 +1214,15 @@ func TestPickerViewShowsApplyError(t *testing.T) {
 	m = next.(Model)
 	next, _ = m.Update(cmd()) // pickErrorMsg
 	m = next.(Model)
-	if !strings.Contains(m.View(), "403") {
-		t.Errorf("picker view missing error text:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "403") {
+		t.Errorf("picker view missing error text:\n%s", m.View().Content)
 	}
 }
 
 func TestDetailFooterShowsLabelAssignKeys(t *testing.T) {
 	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"}}
 	m := detailModel(f)
-	view := m.View()
+	view := m.View().Content
 	for _, want := range []string{"l:labels", "a:assign"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("detail footer missing %q:\n%s", want, view)

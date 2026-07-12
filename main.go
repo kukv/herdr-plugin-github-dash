@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strconv"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/kukv/herdr-plugin-github-dash/internal/ghcli"
 	"github.com/kukv/herdr-plugin-github-dash/internal/herdrctx"
@@ -43,7 +43,7 @@ func main() {
 	} else {
 		model = ui.New(ghcli.New(dir), parseTarget(os.Getenv("GITHUB_DASH_URL")))
 	}
-	p := tea.NewProgram(model, tea.WithAltScreen())
+	p := tea.NewProgram(model)
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
