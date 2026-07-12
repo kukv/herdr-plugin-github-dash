@@ -42,6 +42,7 @@ without a keybinding via `herdr plugin action invoke open --plugin kukv.github-d
 | `r` | refresh | refresh |
 | `o` | open in browser | open in browser |
 | `c` | — | comment (`Ctrl+S` send / `Esc` cancel) |
+| `x` | — | close / reopen (`y` confirm / `n` cancel) |
 | `esc` | — | back to list |
 | `q` | quit | back to list |
 

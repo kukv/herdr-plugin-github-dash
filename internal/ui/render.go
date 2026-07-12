@@ -61,12 +61,54 @@ func (m Model) detailView() string {
 	if m.composing {
 		return m.composeView()
 	}
+	if m.confirming {
+		return m.confirmView()
+	}
 	if m.detailLoading {
 		return m.spin.View() + " loading...\n"
 	}
 	header := titleStyle.Render(m.detailTitle)
-	footer := dimStyle.Render("j/k:scroll  r:refresh  o:browser  c:comment  esc:back")
-	return header + "\n" + m.detail.View() + "\n" + footer
+	footer := dimStyle.Render("j/k:scroll  r:refresh  o:browser  c:comment  " + m.stateFooterKey() + "esc:back")
+	body := header + "\n" + m.detail.View() + "\n"
+	if m.actionErr != "" {
+		body += "error: " + m.actionErr + "\n"
+	}
+	return body + footer
+}
+
+// stateFooterKey returns the state-aware footer hint (with trailing spaces),
+// or "" when the item cannot change state (merged / not yet loaded).
+func (m Model) stateFooterKey() string {
+	closing, ok := m.stateAction()
+	if !ok {
+		return ""
+	}
+	if closing {
+		return "x:close  "
+	}
+	return "x:reopen  "
+}
+
+func (m Model) confirmView() string {
+	header := titleStyle.Render(m.detailTitle)
+	closing, _ := m.stateAction()
+	verb := "Reopen"
+	if closing {
+		verb = "Close"
+	}
+	noun := "issue"
+	if m.detailTarget.Kind == KindPR {
+		noun = "PR"
+	}
+	var b strings.Builder
+	b.WriteString(header + "\n\n")
+	b.WriteString(fmt.Sprintf("%s this %s? ", verb, noun))
+	if m.working {
+		b.WriteString(m.spin.View() + " working...\n")
+	} else {
+		b.WriteString(dimStyle.Render("(y/n)"))
+	}
+	return b.String()
 }
 
 func (m Model) composeView() string {

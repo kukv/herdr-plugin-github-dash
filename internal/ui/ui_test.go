@@ -670,3 +670,49 @@ func TestStateErrorStaysOnDetail(t *testing.T) {
 		t.Errorf("actionErr = %q, want to contain 403", m.actionErr)
 	}
 }
+
+func TestConfirmViewShowsPrompt(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("x"))
+	m = next.(Model)
+	view := m.View()
+	for _, want := range []string{"Close", "(y/n)"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("confirm view missing %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestConfirmViewReopenWording(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "CLOSED"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("x"))
+	m = next.(Model)
+	if !strings.Contains(m.View(), "Reopen") {
+		t.Errorf("confirm view missing Reopen wording:\n%s", m.View())
+	}
+}
+
+func TestDetailFooterShowsStateKey(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"}}
+	m := detailModel(f)
+	if !strings.Contains(m.View(), "x:close") {
+		t.Errorf("detail footer missing x:close for open item:\n%s", m.View())
+	}
+}
+
+func TestStateErrorShownInline(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		stateErr: errors.New("gh pr: HTTP 403 forbidden")}
+	m := detailModel(f)
+	next, _ := m.Update(key("x"))
+	m = next.(Model)
+	next, cmd := m.Update(key("y"))
+	m = next.(Model)
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	if !strings.Contains(m.View(), "403") {
+		t.Errorf("detail view missing inline error:\n%s", m.View())
+	}
+}
