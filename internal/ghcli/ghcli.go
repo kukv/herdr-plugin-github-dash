@@ -182,3 +182,23 @@ func (c *Client) AddIssueComment(repo string, number int, body string) error {
 	_, err := c.run(c.dir, appendRepo([]string{"issue", "comment", strconv.Itoa(number), "--body", body}, repo)...)
 	return err
 }
+
+func (c *Client) ClosePR(repo string, number int) error {
+	_, err := c.run(c.dir, appendRepo([]string{"pr", "close", strconv.Itoa(number)}, repo)...)
+	return err
+}
+
+func (c *Client) ReopenPR(repo string, number int) error {
+	_, err := c.run(c.dir, appendRepo([]string{"pr", "reopen", strconv.Itoa(number)}, repo)...)
+	return err
+}
+
+func (c *Client) CloseIssue(repo string, number int) error {
+	_, err := c.run(c.dir, appendRepo([]string{"issue", "close", strconv.Itoa(number)}, repo)...)
+	return err
+}
+
+func (c *Client) ReopenIssue(repo string, number int) error {
+	_, err := c.run(c.dir, appendRepo([]string{"issue", "reopen", strconv.Itoa(number)}, repo)...)
+	return err
+}

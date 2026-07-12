@@ -193,3 +193,36 @@ func TestAddCommentError(t *testing.T) {
 		t.Errorf("err = %v, want %v", err, wantErr)
 	}
 }
+
+func TestClosePR(t *testing.T) {
+	c, f := newTestClient("", nil)
+	if err := c.ClosePR("", 12); err != nil {
+		t.Fatalf("ClosePR: %v", err)
+	}
+	wantArgs := []string{"pr", "close", "12"}
+	if !reflect.DeepEqual(f.args, wantArgs) {
+		t.Errorf("args = %v, want %v", f.args, wantArgs)
+	}
+	if f.dir != "/repo" {
+		t.Errorf("dir = %q, want /repo", f.dir)
+	}
+}
+
+func TestReopenIssueWithRepoOverride(t *testing.T) {
+	c, f := newTestClient("", nil)
+	if err := c.ReopenIssue("octo/hello", 3); err != nil {
+		t.Fatalf("ReopenIssue: %v", err)
+	}
+	wantArgs := []string{"issue", "reopen", "3", "--repo", "octo/hello"}
+	if !reflect.DeepEqual(f.args, wantArgs) {
+		t.Errorf("args = %v, want %v", f.args, wantArgs)
+	}
+}
+
+func TestStateChangeError(t *testing.T) {
+	wantErr := errors.New("gh pr: HTTP 403 forbidden")
+	c, _ := newTestClient("", wantErr)
+	if err := c.ClosePR("", 12); !errors.Is(err, wantErr) {
+		t.Errorf("err = %v, want %v", err, wantErr)
+	}
+}

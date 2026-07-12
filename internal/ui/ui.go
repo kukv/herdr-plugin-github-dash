@@ -26,6 +26,10 @@ type DataSource interface {
 	OpenIssueWeb(repo string, number int) error
 	AddPRComment(repo string, number int, body string) error
 	AddIssueComment(repo string, number int, body string) error
+	ClosePR(repo string, number int) error
+	ReopenPR(repo string, number int) error
+	CloseIssue(repo string, number int) error
+	ReopenIssue(repo string, number int) error
 }
 
 type Kind int
@@ -66,6 +70,8 @@ type (
 	errorMsg         struct{ err error }
 	commentPostedMsg struct{}
 	commentErrorMsg  struct{ err error }
+	stateChangedMsg  struct{}
+	stateErrorMsg    struct{ err error }
 )
 
 type Model struct {
@@ -94,6 +100,11 @@ type Model struct {
 	composing bool
 	posting   bool
 	postErr   string
+
+	detailState string
+	confirming  bool
+	working     bool
+	actionErr   string
 }
 
 func New(src DataSource, initial *Target) Model {
@@ -211,6 +222,39 @@ func postComment(src DataSource, target Target, body string) tea.Cmd {
 	}
 }
 
+// stateAction reports whether the shown item can change state, and if so
+// whether the action is a close (true) or a reopen (false).
+func (m Model) stateAction() (closing bool, ok bool) {
+	switch m.detailState {
+	case "OPEN":
+		return true, true
+	case "CLOSED":
+		return false, true
+	default:
+		return false, false // MERGED や未取得はアクション無し
+	}
+}
+
+func setState(src DataSource, target Target, closing bool) tea.Cmd {
+	return func() tea.Msg {
+		var err error
+		switch {
+		case target.Kind == KindPR && closing:
+			err = src.ClosePR(target.Repo, target.Number)
+		case target.Kind == KindPR:
+			err = src.ReopenPR(target.Repo, target.Number)
+		case closing:
+			err = src.CloseIssue(target.Repo, target.Number)
+		default:
+			err = src.ReopenIssue(target.Repo, target.Number)
+		}
+		if err != nil {
+			return stateErrorMsg{err}
+		}
+		return stateChangedMsg{}
+	}
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -245,11 +289,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case prDetailMsg:
 		m.detailLoading = false
+		m.detailState = msg.State
+		m.actionErr = ""
 		m.detailTitle = fmt.Sprintf("PR #%d %s", msg.Number, msg.Title)
 		m.setDetailContent(prMarkdown(ghcli.PR(msg)))
 		return m, nil
 	case issueDetailMsg:
 		m.detailLoading = false
+		m.detailState = msg.State
+		m.actionErr = ""
 		m.detailTitle = fmt.Sprintf("Issue #%d %s", msg.Number, msg.Title)
 		m.setDetailContent(issueMarkdown(ghcli.Issue(msg)))
 		return m, nil
@@ -263,6 +311,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case commentErrorMsg:
 		m.posting = false
 		m.postErr = msg.err.Error()
+		return m, nil
+	case stateChangedMsg:
+		m.confirming = false
+		m.working = false
+		m.actionErr = ""
+		m.detailLoading = true
+		return m, fetchDetail(m.src, m.detailTarget)
+	case stateErrorMsg:
+		m.confirming = false
+		m.working = false
+		m.actionErr = msg.err.Error()
 		return m, nil
 	case errorMsg:
 		m.screen = screenError
@@ -321,6 +380,9 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if t, ok := m.selectedTarget(); ok {
 			m.detailTarget = t
 			m.detailTitle = ""
+			m.detailState = ""
+			m.confirming = false
+			m.actionErr = ""
 			m.screen = screenDetail
 			m.detailLoading = true
 			return m, fetchDetail(m.src, t)
@@ -368,6 +430,9 @@ func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.composing {
 		return m.handleComposeKey(msg)
 	}
+	if m.confirming {
+		return m.handleConfirmKey(msg)
+	}
 	switch msg.String() {
 	case "q", "esc":
 		return m.enterList()
@@ -385,12 +450,47 @@ func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.textarea.Reset()
 		m.textarea.Focus()
 		return m, textarea.Blink
+	case "x":
+		if m.detailLoading {
+			return m, nil
+		}
+		if _, ok := m.stateAction(); !ok {
+			return m, nil // merged など: アクション無し
+		}
+		m.confirming = true
+		m.actionErr = ""
+		return m, nil
 	case "ctrl+c":
 		return m, tea.Quit
 	}
 	var cmd tea.Cmd
 	m.detail, cmd = m.detail.Update(msg) // j/k などのスクロールは viewport に委譲
 	return m, cmd
+}
+
+func (m Model) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
+	if m.working {
+		return m, nil // 実行中はそれ以外の入力を無視する
+	}
+	switch msg.String() {
+	case "y":
+		closing, ok := m.stateAction()
+		if !ok {
+			m.confirming = false
+			return m, nil
+		}
+		m.working = true
+		m.actionErr = ""
+		return m, setState(m.src, m.detailTarget, closing)
+	case "n", "esc":
+		m.confirming = false
+		m.actionErr = ""
+		return m, nil
+	}
+	return m, nil
 }
 
 func (m Model) handleComposeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

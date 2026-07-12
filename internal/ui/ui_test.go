@@ -22,6 +22,9 @@ type fakeSource struct {
 
 	commentCalls []string // "pr:<repo>:<n>:<body>" / "issue:<repo>:<n>:<body>"
 	commentErr   error
+
+	stateCalls []string // "close:pr:<repo>:<n>" 等の action:kind:repo:number
+	stateErr   error
 }
 
 func (f *fakeSource) ListPRs() ([]ghcli.PR, error)       { return f.prs, f.err }
@@ -48,6 +51,22 @@ func (f *fakeSource) AddPRComment(repo string, n int, body string) error {
 func (f *fakeSource) AddIssueComment(repo string, n int, body string) error {
 	f.commentCalls = append(f.commentCalls, "issue:"+repo+":"+itoa(n)+":"+body)
 	return f.commentErr
+}
+func (f *fakeSource) ClosePR(repo string, n int) error {
+	f.stateCalls = append(f.stateCalls, "close:pr:"+repo+":"+itoa(n))
+	return f.stateErr
+}
+func (f *fakeSource) ReopenPR(repo string, n int) error {
+	f.stateCalls = append(f.stateCalls, "reopen:pr:"+repo+":"+itoa(n))
+	return f.stateErr
+}
+func (f *fakeSource) CloseIssue(repo string, n int) error {
+	f.stateCalls = append(f.stateCalls, "close:issue:"+repo+":"+itoa(n))
+	return f.stateErr
+}
+func (f *fakeSource) ReopenIssue(repo string, n int) error {
+	f.stateCalls = append(f.stateCalls, "reopen:issue:"+repo+":"+itoa(n))
+	return f.stateErr
 }
 
 func itoa(n int) string { return string(rune('0' + n)) } // テスト内は n < 10 のみ
@@ -520,6 +539,285 @@ func TestComposeCtrlCQuitsWhilePosting(t *testing.T) {
 	_, cmd := m.Update(key("ctrl+c"))
 	if cmd == nil {
 		t.Fatal("cmd = nil while posting, want tea.Quit")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Errorf("msg = %T, want tea.QuitMsg", cmd())
+	}
+}
+
+func TestXEntersConfirmWhenOpen(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("x"))
+	m = next.(Model)
+	if !m.confirming {
+		t.Errorf("confirming = false, want true after x on open item")
+	}
+	if m.screen != screenDetail {
+		t.Errorf("screen = %v, want screenDetail", m.screen)
+	}
+}
+
+func TestXIgnoredWhenMerged(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "MERGED"}}
+	m := detailModel(f)
+	next, cmd := m.Update(key("x"))
+	m = next.(Model)
+	if m.confirming {
+		t.Errorf("confirming = true, want false for merged item")
+	}
+	if cmd != nil {
+		t.Errorf("cmd = non-nil, want nil for merged item")
+	}
+}
+
+func TestConfirmYClosesAndRefetches(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("x"))
+	m = next.(Model)
+	next, cmd := m.Update(key("y"))
+	m = next.(Model)
+	if !m.working || cmd == nil {
+		t.Fatalf("working = %v, cmd = %v; want working with state cmd", m.working, cmd)
+	}
+	msg := cmd()
+	if _, ok := msg.(stateChangedMsg); !ok {
+		t.Fatalf("msg = %T, want stateChangedMsg", msg)
+	}
+	if len(f.stateCalls) != 1 || f.stateCalls[0] != "close:pr::1" {
+		t.Fatalf("stateCalls = %v, want [close:pr::1]", f.stateCalls)
+	}
+	next, cmd = m.Update(msg)
+	m = next.(Model)
+	if m.confirming || m.working || !m.detailLoading || cmd == nil {
+		t.Errorf("after changed: confirming=%v working=%v detailLoading=%v cmd=%v; want false,false,true,non-nil",
+			m.confirming, m.working, m.detailLoading, cmd)
+	}
+}
+
+func TestConfirmReopenRoutesToReopen(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "CLOSED"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("x"))
+	m = next.(Model)
+	next, cmd := m.Update(key("y"))
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("cmd = nil, want reopen cmd")
+	}
+	if _, ok := cmd().(stateChangedMsg); !ok {
+		t.Fatalf("msg type wrong")
+	}
+	if len(f.stateCalls) != 1 || f.stateCalls[0] != "reopen:pr::1" {
+		t.Errorf("stateCalls = %v, want [reopen:pr::1]", f.stateCalls)
+	}
+}
+
+func TestConfirmNCancels(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("x"))
+	m = next.(Model)
+	next, cmd := m.Update(key("n"))
+	m = next.(Model)
+	if m.confirming {
+		t.Errorf("confirming = true after n, want false")
+	}
+	if cmd != nil {
+		t.Errorf("cmd = non-nil after n, want nil")
+	}
+	if len(f.stateCalls) != 0 {
+		t.Errorf("stateCalls = %v, want none", f.stateCalls)
+	}
+}
+
+func TestConfirmEscCancels(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("x"))
+	m = next.(Model)
+	next, _ = m.Update(key("esc"))
+	m = next.(Model)
+	if m.confirming {
+		t.Errorf("confirming = true after esc, want false")
+	}
+	if m.screen != screenDetail {
+		t.Errorf("screen = %v after esc, want screenDetail (esc cancels confirm, not detail)", m.screen)
+	}
+}
+
+func TestStateErrorStaysOnDetail(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		stateErr: errors.New("gh pr: HTTP 403 forbidden")}
+	m := detailModel(f)
+	next, _ := m.Update(key("x"))
+	m = next.(Model)
+	next, cmd := m.Update(key("y"))
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // stateErrorMsg
+	m = next.(Model)
+	if m.confirming {
+		t.Errorf("confirming = true, want false after error")
+	}
+	if m.working {
+		t.Errorf("working = true, want false after error")
+	}
+	if m.screen != screenDetail {
+		t.Errorf("screen = %v, want screenDetail (error stays on detail)", m.screen)
+	}
+	if !strings.Contains(m.actionErr, "403") {
+		t.Errorf("actionErr = %q, want to contain 403", m.actionErr)
+	}
+}
+
+func TestConfirmViewShowsPrompt(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("x"))
+	m = next.(Model)
+	view := m.View()
+	for _, want := range []string{"Close", "(y/n)"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("confirm view missing %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestConfirmViewReopenWording(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "CLOSED"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("x"))
+	m = next.(Model)
+	if !strings.Contains(m.View(), "Reopen") {
+		t.Errorf("confirm view missing Reopen wording:\n%s", m.View())
+	}
+}
+
+func TestDetailFooterShowsStateKey(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"}}
+	m := detailModel(f)
+	if !strings.Contains(m.View(), "x:close") {
+		t.Errorf("detail footer missing x:close for open item:\n%s", m.View())
+	}
+}
+
+func TestStateErrorShownInline(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		stateErr: errors.New("gh pr: HTTP 403 forbidden")}
+	m := detailModel(f)
+	next, _ := m.Update(key("x"))
+	m = next.(Model)
+	next, cmd := m.Update(key("y"))
+	m = next.(Model)
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	if !strings.Contains(m.View(), "403") {
+		t.Errorf("detail view missing inline error:\n%s", m.View())
+	}
+}
+
+// TestActionErrClearedOnReload guards against a stale actionErr surviving a
+// successful detail reload: a failed close leaves actionErr set, and a
+// subsequent r-triggered refresh must clear it once the new detail arrives,
+// even though it does not go through the list->detail enter path.
+func TestActionErrClearedOnReload(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		stateErr: errors.New("gh pr: HTTP 403 forbidden")}
+	m := detailModel(f)
+	next, _ := m.Update(key("x"))
+	m = next.(Model)
+	next, cmd := m.Update(key("y"))
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // stateErrorMsg
+	m = next.(Model)
+	if !strings.Contains(m.actionErr, "403") {
+		t.Fatalf("precondition: actionErr = %q, want to contain 403", m.actionErr)
+	}
+	if m.screen != screenDetail {
+		t.Fatalf("precondition: screen = %v, want screenDetail", m.screen)
+	}
+
+	next, cmd = m.Update(key("r"))
+	m = next.(Model)
+	if !m.detailLoading || cmd == nil {
+		t.Fatalf("detailLoading = %v, cmd = %v; want detailLoading with fetch cmd", m.detailLoading, cmd)
+	}
+	next, _ = m.Update(cmd()) // prDetailMsg
+	m = next.(Model)
+	if m.actionErr != "" {
+		t.Errorf("actionErr = %q after reload, want empty", m.actionErr)
+	}
+	if strings.Contains(m.View(), "403") {
+		t.Errorf("view still shows stale error after reload:\n%s", m.View())
+	}
+}
+
+func TestConfirmSubmitOnIssueRoutesToClose(t *testing.T) {
+	f := &fakeSource{
+		issues: []ghcli.Issue{{Number: 5, Title: "an issue"}},
+		issue:  ghcli.Issue{Number: 5, Title: "an issue", State: "OPEN"},
+	}
+	// New model starts on the PR tab with an empty PR list; switch to Issues,
+	// load them, open detail for the issue, then confirm a close.
+	m := New(f, nil)
+	next, cmd := m.Update(key("tab")) // -> Issues tab, triggers fetchList
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // issueListMsg
+	m = next.(Model)
+	next, cmd = m.Update(key("enter")) // open issue detail
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // issueDetailMsg
+	m = next.(Model)
+	next, _ = m.Update(key("x"))
+	m = next.(Model)
+	next, cmd = m.Update(key("y"))
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("cmd = nil, want state cmd")
+	}
+	if _, ok := cmd().(stateChangedMsg); !ok {
+		t.Fatalf("msg type wrong")
+	}
+	if len(f.stateCalls) != 1 || f.stateCalls[0] != "close:issue::5" {
+		t.Errorf("stateCalls = %v, want [close:issue::5]", f.stateCalls)
+	}
+}
+
+func TestConfirmIgnoresKeysWhileWorking(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("x"))
+	m = next.(Model)
+	next, _ = m.Update(key("y")) // now working == true (cmd not run, so no msg yet)
+	m = next.(Model)
+	if !m.working {
+		t.Fatalf("precondition: working = false, want true")
+	}
+	// A keystroke while working must be a no-op: no state change, no extra cmd.
+	next, cmd := m.Update(key("esc"))
+	m = next.(Model)
+	if cmd != nil {
+		t.Errorf("cmd = non-nil while working, want nil")
+	}
+	if !m.working || !m.confirming {
+		t.Errorf("working/confirming changed while working: working=%v confirming=%v", m.working, m.confirming)
+	}
+}
+
+func TestConfirmCtrlCQuitsWhileWorking(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"}}
+	m := detailModel(f)
+	next, _ := m.Update(key("x"))
+	m = next.(Model)
+	next, _ = m.Update(key("y")) // working == true (cmd intentionally not run)
+	m = next.(Model)
+	if !m.working {
+		t.Fatalf("precondition: want working=true")
+	}
+	_, cmd := m.Update(key("ctrl+c"))
+	if cmd == nil {
+		t.Fatal("cmd = nil while working, want tea.Quit")
 	}
 	if _, ok := cmd().(tea.QuitMsg); !ok {
 		t.Errorf("msg = %T, want tea.QuitMsg", cmd())
