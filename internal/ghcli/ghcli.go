@@ -240,3 +240,31 @@ func (c *Client) ListAssignees(repo string) ([]string, error) {
 	}
 	return logins, nil
 }
+
+func (c *Client) editItems(kindCmd, repo string, number int, add, remove []string, addFlag, removeFlag string) error {
+	args := []string{kindCmd, "edit", strconv.Itoa(number)}
+	for _, v := range add {
+		args = append(args, addFlag, v)
+	}
+	for _, v := range remove {
+		args = append(args, removeFlag, v)
+	}
+	_, err := c.run(c.dir, appendRepo(args, repo)...)
+	return err
+}
+
+func (c *Client) EditPRLabels(repo string, number int, add, remove []string) error {
+	return c.editItems("pr", repo, number, add, remove, "--add-label", "--remove-label")
+}
+
+func (c *Client) EditIssueLabels(repo string, number int, add, remove []string) error {
+	return c.editItems("issue", repo, number, add, remove, "--add-label", "--remove-label")
+}
+
+func (c *Client) EditPRAssignees(repo string, number int, add, remove []string) error {
+	return c.editItems("pr", repo, number, add, remove, "--add-assignee", "--remove-assignee")
+}
+
+func (c *Client) EditIssueAssignees(repo string, number int, add, remove []string) error {
+	return c.editItems("issue", repo, number, add, remove, "--add-assignee", "--remove-assignee")
+}

@@ -278,3 +278,44 @@ func TestGetPRParsesAssignees(t *testing.T) {
 		t.Errorf("unexpected assignees: %+v", pr.Assignees)
 	}
 }
+
+func TestEditPRLabels(t *testing.T) {
+	c, f := newTestClient("", nil)
+	if err := c.EditPRLabels("", 12, []string{"bug"}, []string{"wip"}); err != nil {
+		t.Fatalf("EditPRLabels: %v", err)
+	}
+	wantArgs := []string{"pr", "edit", "12", "--add-label", "bug", "--remove-label", "wip"}
+	if !reflect.DeepEqual(f.args, wantArgs) {
+		t.Errorf("args = %v, want %v", f.args, wantArgs)
+	}
+}
+
+func TestEditPRLabelsAddOnly(t *testing.T) {
+	c, f := newTestClient("", nil)
+	if err := c.EditPRLabels("", 12, []string{"a", "b"}, nil); err != nil {
+		t.Fatalf("EditPRLabels: %v", err)
+	}
+	wantArgs := []string{"pr", "edit", "12", "--add-label", "a", "--add-label", "b"}
+	if !reflect.DeepEqual(f.args, wantArgs) {
+		t.Errorf("args = %v, want %v", f.args, wantArgs)
+	}
+}
+
+func TestEditIssueAssigneesWithRepoOverride(t *testing.T) {
+	c, f := newTestClient("", nil)
+	if err := c.EditIssueAssignees("octo/hello", 3, []string{"alice"}, []string{"bob"}); err != nil {
+		t.Fatalf("EditIssueAssignees: %v", err)
+	}
+	wantArgs := []string{"issue", "edit", "3", "--add-assignee", "alice", "--remove-assignee", "bob", "--repo", "octo/hello"}
+	if !reflect.DeepEqual(f.args, wantArgs) {
+		t.Errorf("args = %v, want %v", f.args, wantArgs)
+	}
+}
+
+func TestEditItemsError(t *testing.T) {
+	wantErr := errors.New("gh pr: HTTP 403 forbidden")
+	c, _ := newTestClient("", wantErr)
+	if err := c.EditPRLabels("", 12, []string{"bug"}, nil); !errors.Is(err, wantErr) {
+		t.Errorf("err = %v, want %v", err, wantErr)
+	}
+}
