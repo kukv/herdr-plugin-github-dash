@@ -39,6 +39,7 @@ func (f *fakeSource) ListIssues() ([]ghcli.Issue, error) { return f.issues, f.er
 func (f *fakeSource) GetPR(repo string, n int) (ghcli.PR, error) {
 	return f.pr, f.err
 }
+
 func (f *fakeSource) GetIssue(repo string, n int) (ghcli.Issue, error) {
 	return f.issue, f.err
 }
@@ -47,30 +48,37 @@ func (f *fakeSource) OpenPRWeb(repo string, n int) error {
 	f.webCalls = append(f.webCalls, "pr:"+repo+":"+itoa(n))
 	return nil
 }
+
 func (f *fakeSource) OpenIssueWeb(repo string, n int) error {
 	f.webCalls = append(f.webCalls, "issue:"+repo+":"+itoa(n))
 	return nil
 }
+
 func (f *fakeSource) AddPRComment(repo string, n int, body string) error {
 	f.commentCalls = append(f.commentCalls, "pr:"+repo+":"+itoa(n)+":"+body)
 	return f.commentErr
 }
+
 func (f *fakeSource) AddIssueComment(repo string, n int, body string) error {
 	f.commentCalls = append(f.commentCalls, "issue:"+repo+":"+itoa(n)+":"+body)
 	return f.commentErr
 }
+
 func (f *fakeSource) ClosePR(repo string, n int) error {
 	f.stateCalls = append(f.stateCalls, "close:pr:"+repo+":"+itoa(n))
 	return f.stateErr
 }
+
 func (f *fakeSource) ReopenPR(repo string, n int) error {
 	f.stateCalls = append(f.stateCalls, "reopen:pr:"+repo+":"+itoa(n))
 	return f.stateErr
 }
+
 func (f *fakeSource) CloseIssue(repo string, n int) error {
 	f.stateCalls = append(f.stateCalls, "close:issue:"+repo+":"+itoa(n))
 	return f.stateErr
 }
+
 func (f *fakeSource) ReopenIssue(repo string, n int) error {
 	f.stateCalls = append(f.stateCalls, "reopen:issue:"+repo+":"+itoa(n))
 	return f.stateErr
@@ -82,14 +90,17 @@ func (f *fakeSource) EditPRLabels(repo string, n int, add, remove []string) erro
 	f.editCalls = append(f.editCalls, "pr:labels:"+repo+":"+itoa(n)+editSuffix(add, remove))
 	return f.editErr
 }
+
 func (f *fakeSource) EditIssueLabels(repo string, n int, add, remove []string) error {
 	f.editCalls = append(f.editCalls, "issue:labels:"+repo+":"+itoa(n)+editSuffix(add, remove))
 	return f.editErr
 }
+
 func (f *fakeSource) EditPRAssignees(repo string, n int, add, remove []string) error {
 	f.editCalls = append(f.editCalls, "pr:assignees:"+repo+":"+itoa(n)+editSuffix(add, remove))
 	return f.editErr
 }
+
 func (f *fakeSource) EditIssueAssignees(repo string, n int, add, remove []string) error {
 	f.editCalls = append(f.editCalls, "issue:assignees:"+repo+":"+itoa(n)+editSuffix(add, remove))
 	return f.editErr
@@ -103,10 +114,14 @@ func itoa(n int) string { return string(rune('0' + n)) } // テスト内は n < 
 
 func samplePRs() []ghcli.PR {
 	return []ghcli.PR{
-		{Number: 1, Title: "first pr", Author: ghcli.Author{Login: "kukv"},
-			UpdatedAt: time.Now(), ReviewDecision: "APPROVED"},
-		{Number: 2, Title: "second pr", Author: ghcli.Author{Login: "bob"},
-			UpdatedAt: time.Now()},
+		{
+			Number: 1, Title: "first pr", Author: ghcli.Author{Login: "kukv"},
+			UpdatedAt: time.Now(), ReviewDecision: "APPROVED",
+		},
+		{
+			Number: 2, Title: "second pr", Author: ghcli.Author{Login: "bob"},
+			UpdatedAt: time.Now(),
+		},
 	}
 }
 
@@ -238,9 +253,12 @@ func TestOOpensBrowserForSelection(t *testing.T) {
 func TestEnterOpensDetailAndEscReturns(t *testing.T) {
 	f := &fakeSource{
 		prs: samplePRs(),
-		pr: ghcli.PR{Number: 1, Title: "first pr", Author: ghcli.Author{Login: "kukv"},
+		pr: ghcli.PR{
+			Number: 1, Title: "first pr", Author: ghcli.Author{Login: "kukv"},
 			Body: "the body text", Comments: []ghcli.Comment{
-				{Author: ghcli.Author{Login: "bob"}, Body: "a comment"}}},
+				{Author: ghcli.Author{Login: "bob"}, Body: "a comment"},
+			},
+		},
 	}
 	m := loadedModel(f)
 	next, cmd := m.Update(key("enter"))
@@ -446,8 +464,10 @@ func TestComposeEscCancels(t *testing.T) {
 }
 
 func TestComposePostErrorKeepsDraft(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr"},
-		commentErr: errors.New("gh pr: HTTP 403 forbidden")}
+	f := &fakeSource{
+		prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr"},
+		commentErr: errors.New("gh pr: HTTP 403 forbidden"),
+	}
 	m := detailModel(f)
 	next, _ := m.Update(key("c"))
 	m = next.(Model)
@@ -485,8 +505,10 @@ func TestComposeViewShowsTextareaAndHelp(t *testing.T) {
 }
 
 func TestComposeViewShowsPostError(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr"},
-		commentErr: errors.New("gh pr: HTTP 403 forbidden")}
+	f := &fakeSource{
+		prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr"},
+		commentErr: errors.New("gh pr: HTTP 403 forbidden"),
+	}
 	m := detailModel(f)
 	next, _ := m.Update(key("c"))
 	m = next.(Model)
@@ -680,8 +702,10 @@ func TestConfirmEscCancels(t *testing.T) {
 }
 
 func TestStateErrorStaysOnDetail(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
-		stateErr: errors.New("gh pr: HTTP 403 forbidden")}
+	f := &fakeSource{
+		prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		stateErr: errors.New("gh pr: HTTP 403 forbidden"),
+	}
 	m := detailModel(f)
 	next, _ := m.Update(key("x"))
 	m = next.(Model)
@@ -735,8 +759,10 @@ func TestDetailFooterShowsStateKey(t *testing.T) {
 }
 
 func TestStateErrorShownInline(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
-		stateErr: errors.New("gh pr: HTTP 403 forbidden")}
+	f := &fakeSource{
+		prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		stateErr: errors.New("gh pr: HTTP 403 forbidden"),
+	}
 	m := detailModel(f)
 	next, _ := m.Update(key("x"))
 	m = next.(Model)
@@ -754,8 +780,10 @@ func TestStateErrorShownInline(t *testing.T) {
 // subsequent r-triggered refresh must clear it once the new detail arrives,
 // even though it does not go through the list->detail enter path.
 func TestActionErrClearedOnReload(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
-		stateErr: errors.New("gh pr: HTTP 403 forbidden")}
+	f := &fakeSource{
+		prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		stateErr: errors.New("gh pr: HTTP 403 forbidden"),
+	}
 	m := detailModel(f)
 	next, _ := m.Update(key("x"))
 	m = next.(Model)
@@ -857,9 +885,11 @@ func TestConfirmCtrlCQuitsWhileWorking(t *testing.T) {
 }
 
 func TestLOpensLabelPickerPrechecked(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(),
+	f := &fakeSource{
+		prs:    samplePRs(),
 		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
-		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}},
+	}
 	m := detailModel(f)
 	next, cmd := m.Update(key("l"))
 	m = next.(Model)
@@ -880,9 +910,11 @@ func TestLOpensLabelPickerPrechecked(t *testing.T) {
 }
 
 func TestAOpensAssigneePicker(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(),
+	f := &fakeSource{
+		prs:   samplePRs(),
 		pr:    ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
-		users: []string{"alice", "bob"}}
+		users: []string{"alice", "bob"},
+	}
 	m := detailModel(f)
 	next, cmd := m.Update(key("a"))
 	m = next.(Model)
@@ -894,9 +926,11 @@ func TestAOpensAssigneePicker(t *testing.T) {
 }
 
 func TestPickerApplyComputesDiffAndRefetches(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(),
+	f := &fakeSource{
+		prs:    samplePRs(),
 		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
-		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}},
+	}
 	m := detailModel(f)
 	next, cmd := m.Update(key("l"))
 	m = next.(Model)
@@ -930,9 +964,11 @@ func TestPickerApplyComputesDiffAndRefetches(t *testing.T) {
 }
 
 func TestPickerNoChangeClosesWithoutEdit(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(),
+	f := &fakeSource{
+		prs:    samplePRs(),
 		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
-		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}},
+	}
 	m := detailModel(f)
 	next, cmd := m.Update(key("l"))
 	m = next.(Model)
@@ -952,9 +988,11 @@ func TestPickerNoChangeClosesWithoutEdit(t *testing.T) {
 }
 
 func TestPickerEscCancels(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(),
+	f := &fakeSource{
+		prs:    samplePRs(),
 		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
-		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}},
+	}
 	m := detailModel(f)
 	next, cmd := m.Update(key("l"))
 	m = next.(Model)
@@ -973,10 +1011,12 @@ func TestPickerEscCancels(t *testing.T) {
 }
 
 func TestPickerApplyErrorKeepsPicker(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(),
+	f := &fakeSource{
+		prs:     samplePRs(),
 		pr:      ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
 		labels:  []ghcli.Label{{Name: "bug"}, {Name: "wip"}},
-		editErr: errors.New("gh pr: HTTP 403 forbidden")}
+		editErr: errors.New("gh pr: HTTP 403 forbidden"),
+	}
 	m := detailModel(f)
 	next, cmd := m.Update(key("l"))
 	m = next.(Model)
@@ -1000,9 +1040,11 @@ func TestPickerApplyErrorKeepsPicker(t *testing.T) {
 }
 
 func TestPickerFetchErrorInlineOnDetail(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(),
+	f := &fakeSource{
+		prs:       samplePRs(),
 		pr:        ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
-		labelsErr: errors.New("gh label: HTTP 403 forbidden")}
+		labelsErr: errors.New("gh label: HTTP 403 forbidden"),
+	}
 	m := detailModel(f)
 	next, cmd := m.Update(key("l"))
 	m = next.(Model)
@@ -1052,9 +1094,11 @@ func TestPickerApplyOnIssueRoutesToIssue(t *testing.T) {
 }
 
 func TestPickerLoadingIgnoresKeys(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(),
+	f := &fakeSource{
+		prs:    samplePRs(),
 		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
-		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}},
+	}
 	m := detailModel(f)
 	next, _ := m.Update(key("l"))
 	m = next.(Model)
@@ -1076,9 +1120,11 @@ func TestPickerLoadingIgnoresKeys(t *testing.T) {
 }
 
 func TestPickerLoadingCtrlCQuits(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(),
+	f := &fakeSource{
+		prs:    samplePRs(),
 		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
-		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}},
+	}
 	m := detailModel(f)
 	next, _ := m.Update(key("l"))
 	m = next.(Model)
@@ -1093,9 +1139,11 @@ func TestPickerLoadingCtrlCQuits(t *testing.T) {
 }
 
 func TestPickerApplyAssigneesRoutesToPR(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(),
+	f := &fakeSource{
+		prs:   samplePRs(),
 		pr:    ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
-		users: []string{"alice"}}
+		users: []string{"alice"},
+	}
 	m := detailModel(f)
 	next, cmd := m.Update(key("a"))
 	m = next.(Model)
@@ -1115,9 +1163,11 @@ func TestPickerApplyAssigneesRoutesToPR(t *testing.T) {
 }
 
 func TestPickerViewShowsItemsAndHelp(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(),
+	f := &fakeSource{
+		prs:    samplePRs(),
 		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
-		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}},
+	}
 	m := detailModel(f)
 	next, cmd := m.Update(key("l"))
 	m = next.(Model)
@@ -1132,10 +1182,12 @@ func TestPickerViewShowsItemsAndHelp(t *testing.T) {
 }
 
 func TestPickerViewShowsApplyError(t *testing.T) {
-	f := &fakeSource{prs: samplePRs(),
+	f := &fakeSource{
+		prs:     samplePRs(),
 		pr:      ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
 		labels:  []ghcli.Label{{Name: "bug"}, {Name: "wip"}},
-		editErr: errors.New("gh pr: HTTP 403 forbidden")}
+		editErr: errors.New("gh pr: HTTP 403 forbidden"),
+	}
 	m := detailModel(f)
 	next, cmd := m.Update(key("l"))
 	m = next.(Model)

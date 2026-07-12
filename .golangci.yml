@@ -10,6 +10,7 @@ linters:
     - bodyclose
     - unconvert
     - unparam
+    - prealloc
   settings:
     gosec:
       excludes:
@@ -23,7 +24,11 @@ linters:
         linters:
           - gosec
 
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
 formatters:
   enable:
-    - gofmt
+    - gofumpt
     - goimports

@@ -242,7 +242,8 @@ func (c *Client) ListAssignees(repo string) ([]string, error) {
 }
 
 func (c *Client) editItems(kindCmd, repo string, number int, add, remove []string, addFlag, removeFlag string) error {
-	args := []string{kindCmd, "edit", strconv.Itoa(number)}
+	args := make([]string, 0, 3+2*len(add)+2*len(remove))
+	args = append(args, kindCmd, "edit", strconv.Itoa(number))
 	for _, v := range add {
 		args = append(args, addFlag, v)
 	}

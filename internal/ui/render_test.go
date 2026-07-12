@@ -51,13 +51,17 @@ func TestPRMarkdownContainsMetaBodyAndComments(t *testing.T) {
 		Labels: []ghcli.Label{{Name: "Kind: Feature"}},
 		Body:   "body text",
 		Comments: []ghcli.Comment{
-			{Author: ghcli.Author{Login: "bob"}, Body: "comment text",
-				CreatedAt: time.Date(2026, 7, 11, 11, 0, 0, 0, time.UTC)},
+			{
+				Author: ghcli.Author{Login: "bob"}, Body: "comment text",
+				CreatedAt: time.Date(2026, 7, 11, 11, 0, 0, 0, time.UTC),
+			},
 		},
 	}
 	md := prMarkdown(pr)
-	for _, want := range []string{"#12", "feat: pane", "@kukv", "OPEN (draft)",
-		"REVIEW_REQUIRED", "Kind: Feature", "body text", "@bob", "comment text"} {
+	for _, want := range []string{
+		"#12", "feat: pane", "@kukv", "OPEN (draft)",
+		"REVIEW_REQUIRED", "Kind: Feature", "body text", "@bob", "comment text",
+	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)
 		}
