@@ -30,6 +30,12 @@ type DataSource interface {
 	ReopenPR(repo string, number int) error
 	CloseIssue(repo string, number int) error
 	ReopenIssue(repo string, number int) error
+	ListLabels(repo string) ([]ghcli.Label, error)
+	ListAssignees(repo string) ([]string, error)
+	EditPRLabels(repo string, number int, add, remove []string) error
+	EditIssueLabels(repo string, number int, add, remove []string) error
+	EditPRAssignees(repo string, number int, add, remove []string) error
+	EditIssueAssignees(repo string, number int, add, remove []string) error
 }
 
 type Kind int
@@ -62,16 +68,23 @@ const (
 )
 
 type (
-	prListMsg        []ghcli.PR
-	issueListMsg     []ghcli.Issue
-	prDetailMsg      ghcli.PR
-	issueDetailMsg   ghcli.Issue
-	repoNameMsg      string
-	errorMsg         struct{ err error }
-	commentPostedMsg struct{}
-	commentErrorMsg  struct{ err error }
-	stateChangedMsg  struct{}
-	stateErrorMsg    struct{ err error }
+	prListMsg           []ghcli.PR
+	issueListMsg        []ghcli.Issue
+	prDetailMsg         ghcli.PR
+	issueDetailMsg      ghcli.Issue
+	repoNameMsg         string
+	errorMsg            struct{ err error }
+	commentPostedMsg    struct{}
+	commentErrorMsg     struct{ err error }
+	stateChangedMsg     struct{}
+	stateErrorMsg       struct{ err error }
+	pickerCandidatesMsg struct {
+		kind   pickerKind
+		labels []ghcli.Label
+		users  []string
+	}
+	pickerAppliedMsg struct{}
+	pickErrorMsg     struct{ err error }
 )
 
 type Model struct {
@@ -105,6 +118,13 @@ type Model struct {
 	confirming  bool
 	working     bool
 	actionErr   string
+
+	picking         bool
+	pickerLoading   bool
+	applying        bool
+	picker          picker
+	detailLabels    []string
+	detailAssignees []string
 }
 
 func New(src DataSource, initial *Target) Model {
@@ -255,6 +275,46 @@ func setState(src DataSource, target Target, closing bool) tea.Cmd {
 	}
 }
 
+func fetchLabelPicker(src DataSource, target Target) tea.Cmd {
+	return func() tea.Msg {
+		labels, err := src.ListLabels(target.Repo)
+		if err != nil {
+			return pickErrorMsg{err}
+		}
+		return pickerCandidatesMsg{kind: pickLabels, labels: labels}
+	}
+}
+
+func fetchAssigneePicker(src DataSource, target Target) tea.Cmd {
+	return func() tea.Msg {
+		users, err := src.ListAssignees(target.Repo)
+		if err != nil {
+			return pickErrorMsg{err}
+		}
+		return pickerCandidatesMsg{kind: pickAssignees, users: users}
+	}
+}
+
+func applyPicker(src DataSource, target Target, kind pickerKind, add, remove []string) tea.Cmd {
+	return func() tea.Msg {
+		var err error
+		switch {
+		case kind == pickLabels && target.Kind == KindPR:
+			err = src.EditPRLabels(target.Repo, target.Number, add, remove)
+		case kind == pickLabels:
+			err = src.EditIssueLabels(target.Repo, target.Number, add, remove)
+		case target.Kind == KindPR:
+			err = src.EditPRAssignees(target.Repo, target.Number, add, remove)
+		default:
+			err = src.EditIssueAssignees(target.Repo, target.Number, add, remove)
+		}
+		if err != nil {
+			return pickErrorMsg{err}
+		}
+		return pickerAppliedMsg{}
+	}
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -291,6 +351,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detailLoading = false
 		m.detailState = msg.State
 		m.actionErr = ""
+		m.detailLabels = labelNames(msg.Labels)
+		m.detailAssignees = authorLogins(msg.Assignees)
 		m.detailTitle = fmt.Sprintf("PR #%d %s", msg.Number, msg.Title)
 		m.setDetailContent(prMarkdown(ghcli.PR(msg)))
 		return m, nil
@@ -298,6 +360,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detailLoading = false
 		m.detailState = msg.State
 		m.actionErr = ""
+		m.detailLabels = labelNames(msg.Labels)
+		m.detailAssignees = authorLogins(msg.Assignees)
 		m.detailTitle = fmt.Sprintf("Issue #%d %s", msg.Number, msg.Title)
 		m.setDetailContent(issueMarkdown(ghcli.Issue(msg)))
 		return m, nil
@@ -322,6 +386,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.confirming = false
 		m.working = false
 		m.actionErr = msg.err.Error()
+		return m, nil
+	case pickerCandidatesMsg:
+		m.pickerLoading = false
+		if msg.kind == pickLabels {
+			names := make([]string, len(msg.labels))
+			colors := make(map[string]string, len(msg.labels))
+			for i, l := range msg.labels {
+				names[i] = l.Name
+				colors[l.Name] = l.Color
+			}
+			m.picker = newPicker(pickLabels, "Labels", names, colors, m.detailLabels)
+		} else {
+			m.picker = newPicker(pickAssignees, "Assignees", msg.users, nil, m.detailAssignees)
+		}
+		m.picking = true
+		return m, nil
+	case pickerAppliedMsg:
+		m.picking = false
+		m.applying = false
+		m.detailLoading = true
+		return m, fetchDetail(m.src, m.detailTarget)
+	case pickErrorMsg:
+		if m.picking {
+			m.applying = false
+			m.picker.err = msg.err.Error()
+		} else {
+			m.pickerLoading = false
+			m.actionErr = msg.err.Error()
+		}
 		return m, nil
 	case errorMsg:
 		m.screen = screenError
@@ -382,6 +475,9 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.detailTitle = ""
 			m.detailState = ""
 			m.confirming = false
+			m.picking = false
+			m.pickerLoading = false
+			m.applying = false
 			m.actionErr = ""
 			m.screen = screenDetail
 			m.detailLoading = true
@@ -417,6 +513,22 @@ func (m Model) selectedTarget() (Target, bool) {
 	return Target{Kind: KindIssue, Number: m.issues[m.cursors[tabIssues]].Number}, true
 }
 
+func labelNames(labels []ghcli.Label) []string {
+	names := make([]string, len(labels))
+	for i, l := range labels {
+		names[i] = l.Name
+	}
+	return names
+}
+
+func authorLogins(authors []ghcli.Author) []string {
+	logins := make([]string, len(authors))
+	for i, a := range authors {
+		logins[i] = a.Login
+	}
+	return logins
+}
+
 func (m Model) enterList() (tea.Model, tea.Cmd) {
 	m.screen = screenList
 	if !m.loaded[m.tab] {
@@ -432,6 +544,9 @@ func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.confirming {
 		return m.handleConfirmKey(msg)
+	}
+	if m.picking {
+		return m.handlePickerKey(msg)
 	}
 	switch msg.String() {
 	case "q", "esc":
@@ -460,12 +575,59 @@ func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.confirming = true
 		m.actionErr = ""
 		return m, nil
+	case "l":
+		if m.detailLoading || m.pickerLoading {
+			return m, nil
+		}
+		m.pickerLoading = true
+		m.actionErr = ""
+		return m, fetchLabelPicker(m.src, m.detailTarget)
+	case "a":
+		if m.detailLoading || m.pickerLoading {
+			return m, nil
+		}
+		m.pickerLoading = true
+		m.actionErr = ""
+		return m, fetchAssigneePicker(m.src, m.detailTarget)
 	case "ctrl+c":
 		return m, tea.Quit
 	}
 	var cmd tea.Cmd
 	m.detail, cmd = m.detail.Update(msg) // j/k などのスクロールは viewport に委譲
 	return m, cmd
+}
+
+func (m Model) handlePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
+	if m.applying {
+		return m, nil // 適用中はそれ以外の入力を無視する
+	}
+	switch msg.String() {
+	case "esc":
+		m.picking = false
+		return m, nil
+	case "j", "down":
+		m.picker.moveDown(visibleRows(m.height))
+		return m, nil
+	case "k", "up":
+		m.picker.moveUp(visibleRows(m.height))
+		return m, nil
+	case " ", "space":
+		m.picker.toggle()
+		return m, nil
+	case "enter":
+		add, remove := m.picker.diff()
+		if len(add) == 0 && len(remove) == 0 {
+			m.picking = false // 変更なしは閉じるだけ
+			return m, nil
+		}
+		m.applying = true
+		m.picker.err = ""
+		return m, applyPicker(m.src, m.detailTarget, m.picker.kind, add, remove)
+	}
+	return m, nil
 }
 
 func (m Model) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
