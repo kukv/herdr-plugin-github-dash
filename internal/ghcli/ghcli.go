@@ -222,9 +222,9 @@ func (c *Client) ListLabels(repo string) ([]Label, error) {
 // gh api substitutes {owner}/{repo} from the current directory's repo; for an
 // override we build the explicit path (gh api takes no --repo).
 func (c *Client) ListAssignees(repo string) ([]string, error) {
-	path := "repos/{owner}/{repo}/assignees"
+	path := "repos/{owner}/{repo}/assignees?per_page=100"
 	if repo != "" {
-		path = "repos/" + repo + "/assignees"
+		path = "repos/" + repo + "/assignees?per_page=100"
 	}
 	out, err := c.run(c.dir, "api", path)
 	if err != nil {

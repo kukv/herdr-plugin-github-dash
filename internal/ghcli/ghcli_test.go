@@ -248,7 +248,7 @@ func TestListAssignees(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListAssignees: %v", err)
 	}
-	wantArgs := []string{"api", "repos/{owner}/{repo}/assignees"}
+	wantArgs := []string{"api", "repos/{owner}/{repo}/assignees?per_page=100"}
 	if !reflect.DeepEqual(f.args, wantArgs) {
 		t.Errorf("args = %v, want %v", f.args, wantArgs)
 	}
@@ -262,7 +262,7 @@ func TestListAssigneesWithRepoOverride(t *testing.T) {
 	if _, err := c.ListAssignees("octo/hello"); err != nil {
 		t.Fatalf("ListAssignees: %v", err)
 	}
-	wantArgs := []string{"api", "repos/octo/hello/assignees"}
+	wantArgs := []string{"api", "repos/octo/hello/assignees?per_page=100"}
 	if !reflect.DeepEqual(f.args, wantArgs) {
 		t.Errorf("args = %v, want %v", f.args, wantArgs)
 	}
