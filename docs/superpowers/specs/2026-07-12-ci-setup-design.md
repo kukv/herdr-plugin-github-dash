@@ -31,8 +31,8 @@ update 機構は無し）、`version` フィールドはメタデータのみで
   - **lint**
     - `actions/checkout`
     - `actions/setup-go`（`go-version-file: go.mod`, `cache: false`）
-    - golangci-lint を install script でバージョン固定（`v2.12.2`）して導入し、`golangci-lint run ./...` を実行
-    - `golangci-lint fmt --diff ./...` でフォーマット崩れを検出し fail させる（崩れがあれば exit 1）
+    - `golangci/golangci-lint-action@v9`（`version: v2.12.2` 固定）で `run`。アクションは golangci-lint を PATH に載せる
+    - 後続ステップ `golangci-lint fmt --diff ./...` でフォーマット崩れを検出し fail させる（崩れがあれば exit 1）
   - **test**
     - `actions/checkout`
     - `actions/setup-go`（`go-version-file: go.mod`, `cache: false`）
