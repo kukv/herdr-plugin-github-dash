@@ -7,6 +7,7 @@ permissions:
   contents: read
   pull-requests: write
   actions: read
+  checks: write
 
 jobs:
   lint:
@@ -35,6 +36,14 @@ jobs:
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@v1.13.0
       - name: Test
-        run: gotestsum --format pkgname -- -coverprofile=coverage.out -covermode=atomic ./...
+        run: gotestsum --format testdox --junitfile test-report.xml -- -race -coverprofile=coverage.out -covermode=atomic ./...
+      - name: Test Report
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        if: always()
+        with:
+          name: Test Report
+          path: test-report.xml
+          reporter: java-junit
       - name: Report coverage
         uses: k1LoW/octocov-action@b3b6ee60482a667950f87553abf1df63217235d9 # v1.5.1
+        if: always()
