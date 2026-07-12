@@ -634,7 +634,7 @@ func TestConfirmReopenRoutesToReopen(t *testing.T) {
 	next, _ := m.Update(key("x"))
 	m = next.(Model)
 	next, cmd := m.Update(key("y"))
-	m = next.(Model)
+	_ = next.(Model)
 	if cmd == nil {
 		t.Fatal("cmd = nil, want reopen cmd")
 	}
@@ -804,7 +804,7 @@ func TestConfirmSubmitOnIssueRoutesToClose(t *testing.T) {
 	next, _ = m.Update(key("x"))
 	m = next.(Model)
 	next, cmd = m.Update(key("y"))
-	m = next.(Model)
+	_ = next.(Model)
 	if cmd == nil {
 		t.Fatal("cmd = nil, want state cmd")
 	}
@@ -1041,7 +1041,7 @@ func TestPickerApplyOnIssueRoutesToIssue(t *testing.T) {
 	next, _ = m.Update(key("space")) // add bug
 	m = next.(Model)
 	next, cmd = m.Update(key("enter"))
-	m = next.(Model)
+	_ = next.(Model)
 	if cmd == nil {
 		t.Fatal("cmd = nil, want edit cmd")
 	}
@@ -1083,7 +1083,7 @@ func TestPickerLoadingCtrlCQuits(t *testing.T) {
 	next, _ := m.Update(key("l"))
 	m = next.(Model)
 	next, cmd := m.Update(key("ctrl+c"))
-	m = next.(Model)
+	_ = next.(Model)
 	if cmd == nil {
 		t.Fatal("cmd = nil, want tea.Quit while pickerLoading")
 	}
@@ -1104,7 +1104,7 @@ func TestPickerApplyAssigneesRoutesToPR(t *testing.T) {
 	next, _ = m.Update(key("space")) // select alice -> add
 	m = next.(Model)
 	next, cmd = m.Update(key("enter"))
-	m = next.(Model)
+	_ = next.(Model)
 	if cmd == nil {
 		t.Fatal("cmd = nil, want edit cmd")
 	}

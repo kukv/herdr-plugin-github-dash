@@ -72,7 +72,7 @@ func (p *picker) moveDown(visible int) {
 	}
 }
 
-func (p *picker) moveUp(visible int) {
+func (p *picker) moveUp() {
 	if p.cursor > 0 {
 		p.cursor--
 		if p.cursor < p.offset {
