@@ -1113,3 +1113,52 @@ func TestPickerApplyAssigneesRoutesToPR(t *testing.T) {
 		t.Errorf("editCalls = %v, want [pr:assignees::1:add=alice:remove=]", f.editCalls)
 	}
 }
+
+func TestPickerViewShowsItemsAndHelp(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
+		labels: []ghcli.Label{{Name: "bug"}, {Name: "wip"}}}
+	m := detailModel(f)
+	next, cmd := m.Update(key("l"))
+	m = next.(Model)
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	view := m.View()
+	for _, want := range []string{"Labels", "[x] bug", "[ ] wip", "space:toggle", "enter:apply", "esc:cancel"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("picker view missing %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestPickerViewShowsApplyError(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(),
+		pr:      ghcli.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []ghcli.Label{{Name: "bug"}}},
+		labels:  []ghcli.Label{{Name: "bug"}, {Name: "wip"}},
+		editErr: errors.New("gh pr: HTTP 403 forbidden")}
+	m := detailModel(f)
+	next, cmd := m.Update(key("l"))
+	m = next.(Model)
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	next, _ = m.Update(key("space"))
+	m = next.(Model)
+	next, cmd = m.Update(key("enter"))
+	m = next.(Model)
+	next, _ = m.Update(cmd()) // pickErrorMsg
+	m = next.(Model)
+	if !strings.Contains(m.View(), "403") {
+		t.Errorf("picker view missing error text:\n%s", m.View())
+	}
+}
+
+func TestDetailFooterShowsLabelAssignKeys(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), pr: ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"}}
+	m := detailModel(f)
+	view := m.View()
+	for _, want := range []string{"l:labels", "a:assign"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("detail footer missing %q:\n%s", want, view)
+		}
+	}
+}
