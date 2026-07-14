@@ -1,0 +1,114 @@
+name: security
+
+# fanout(bright-room/canonical-files)が配布する共通セキュリティ検査(層1・言語非依存)。
+# このファイルは fanout 管理(replaced)。直接編集しても次回同期で差し戻される。
+# 変更は canonical-files の templates/security-workflow.liquid へ。
+# policy ジョブのルール本体は bright-room/repo-policies(main 参照)で一元管理。
+# 設計: repository-fanout docs/superpowers/specs/2026-07-14-security-fanout-design.md
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 0 * * 1" # 週次。脆弱性 DB は後から更新されるため定期実行する
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # 不可視 Unicode / Trojan Source(全テキストファイル・言語非依存)
+  hidden-unicode:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: scan source files
+        run: |
+          npx --yes anti-trojan-source@1.12.0 --verbose \
+            --files='**/*.{go,java,kt,kts,rs,ts,tsx,js,jsx,mjs,cjs,py,rb,php,c,h,cpp,sh,tf,toml,yml,yaml,json,md}'
+          npx --yes anti-trojan-source@1.12.0 --verbose \
+            --files='.github/**/*.{yml,yaml,md,json}'
+      - name: scan AI rules files
+        run: |
+          npx --yes anti-trojan-source@1.12.0 --verbose \
+            --files='**/{CLAUDE.md,AGENTS.md,.cursorrules,.clinerules,.windsurfrules,*.mdc,copilot-instructions.md}'
+          npx --yes anti-trojan-source@1.12.0 --verbose \
+            --files='.github/copilot-instructions.md'
+          npx --yes anti-trojan-source@1.12.0 --verbose \
+            --files='.cursor/rules/*.mdc'
+          npx --yes anti-trojan-source@1.12.0 --verbose \
+            --files='.claude/**/*.md'
+
+  # シークレット検知(全履歴)
+  secrets:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1 \
+            git /repo --redact --verbose --exit-code 1
+
+  # 多エコシステム SCA(lockfile を再帰自動検出。リポ直下の osv-scanner.toml は自動適用)
+  sca:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --recursive
+            --include-git-root
+            ./
+
+  # workflow YAML 自体の静的解析(オフライン。findings で exit 非ゼロ)
+  workflow-audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: zizmor
+        run: pipx run zizmor==1.26.1 --offline .
+
+  # プロジェクト設定のセキュリティ前提検査(ルールは bright-room/repo-policies で一元管理)
+  policy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: bright-room/repo-policies
+          ref: main
+          path: .repo-policies
+          persist-credentials: false
+      - name: collect facts
+        run: .repo-policies/scripts/collect-facts.sh . | tee /tmp/facts.json
+      - name: conftest
+        run: |
+          docker run --rm \
+            -v "$PWD/.repo-policies/policy:/policy:ro" \
+            -v /tmp/facts.json:/facts.json:ro \
+            openpolicyagent/conftest:v0.68.2 test --policy /policy /facts.json
