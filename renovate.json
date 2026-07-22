@@ -1,5 +1,6 @@
 {
   "extends": [
-    "github>bright-room/renovate-config"
+    "github>bright-room/renovate-config",
+    "github>bright-room/renovate-config:go"
   ]
 }
