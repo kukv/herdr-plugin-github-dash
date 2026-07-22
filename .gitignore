@@ -39,9 +39,12 @@ tmp/*
 
 ### Misc ###
 HELP.md
+
+### go ###
+coverage.out
+*.exe
 # <<< repository-fanout managed <<<
 bin/
 
 ### Test / coverage artifacts ###
-coverage.out
 test-report.xml
