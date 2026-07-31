@@ -11,7 +11,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "0 0 * * 1" # 週次。脆弱性 DB は後から更新されるため定期実行する
+    - cron: "0 0 * * 1" # 週次。脆弱性 DB は後から更新されるため sca のみ定期実行する(他 job は schedule 時スキップ)
 
 permissions: {}
 
@@ -22,6 +22,7 @@ concurrency:
 jobs:
   # 不可視 Unicode / Trojan Source(全テキストファイル・言語非依存)
   hidden-unicode:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -48,6 +49,7 @@ jobs:
 
   # シークレット検知(全履歴)
   secrets:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -79,6 +81,7 @@ jobs:
 
   # workflow YAML 自体の静的解析(オフライン。findings で exit 非ゼロ)
   workflow-audit:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -91,6 +94,7 @@ jobs:
 
   # プロジェクト設定のセキュリティ前提検査(ルールは bright-room/repo-policies で一元管理)
   policy:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: read
