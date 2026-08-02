@@ -1,4 +1,3 @@
-# >>> repository-fanout managed >>>
 ### JetBrains IDEs ###
 .fleet/
 .idea/
@@ -43,7 +42,6 @@ HELP.md
 ### go ###
 coverage.out
 *.exe
-# <<< repository-fanout managed <<<
 bin/
 
 ### Test / coverage artifacts ###
