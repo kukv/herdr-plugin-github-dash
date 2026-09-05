@@ -12,10 +12,42 @@ octoscope = **Octo**cat + **-scope**: 自分の GitHub の仕事を見渡す望�
 
 ## インストール
 
-[リリースページ](https://github.com/kukv/octoscope/releases)からプラットフォーム向けのバイナリを
-ダウンロードするか、ソースからビルドする。
+### mise
+
+[mise](https://mise.jdx.dev/) で GitHub Releases のバイナリをそのまま入れられる。
+
+    mise use -g github:kukv/octoscope@latest
+
+プロジェクトごとに固定するなら `mise.toml` に書く。
+
+    [tools]
+    "github:kukv/octoscope" = "latest"
+
+### 手動でダウンロード
+
+[リリースページ](https://github.com/kukv/octoscope/releases)からプラットフォーム向けの
+アーカイブを取得し、展開して `octoscope` を `PATH` の通った場所に置く。
+
+    tar xzf octoscope_<version>_linux_amd64.tar.gz
+    install -m 0755 octoscope ~/.local/bin/
+
+Windows では zip を展開し、`octoscope.exe` を `PATH` の通ったディレクトリに置く。
+
+アーカイブと一緒に `checksums.txt` も公開している。
+
+    sha256sum -c checksums.txt --ignore-missing
+
+### go install
 
     go install github.com/kukv/octoscope/cmd/octoscope@latest
+
+この方法では `--version` は `dev` と表示される。バージョン文字列はリリースビルド時に埋め込まれる。
+
+### ソースからビルド
+
+    git clone https://github.com/kukv/octoscope.git
+    cd octoscope
+    go build -o octoscope ./cmd/octoscope
 
 ## 使い方
 
