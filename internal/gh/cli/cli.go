@@ -1,14 +1,14 @@
-// Package ghcli fetches GitHub data by running the gh CLI in a target directory.
-package ghcli
+// Package cli fetches GitHub data by running the gh CLI in a target directory.
+package cli
 
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
-	"time"
+
+	"github.com/kukv/octoscope/internal/gh"
 )
 
 const (
@@ -17,52 +17,6 @@ const (
 	issueListFields = "number,title,author,state,updatedAt,labels,url"
 	issueViewFields = issueListFields + ",body,comments,assignees"
 )
-
-// ErrGhNotFound is returned when the gh binary is not on PATH.
-var ErrGhNotFound = errors.New("gh CLI not found; install it and run: gh auth login")
-
-type Author struct {
-	Login string `json:"login"`
-}
-
-type Label struct {
-	Name  string `json:"name"`
-	Color string `json:"color"`
-}
-
-type Comment struct {
-	Author    Author    `json:"author"`
-	Body      string    `json:"body"`
-	CreatedAt time.Time `json:"createdAt"`
-}
-
-type PR struct {
-	Number         int       `json:"number"`
-	Title          string    `json:"title"`
-	Author         Author    `json:"author"`
-	State          string    `json:"state"`
-	IsDraft        bool      `json:"isDraft"`
-	UpdatedAt      time.Time `json:"updatedAt"`
-	ReviewDecision string    `json:"reviewDecision"`
-	URL            string    `json:"url"`
-	Body           string    `json:"body"`
-	Comments       []Comment `json:"comments"`
-	Labels         []Label   `json:"labels"`
-	Assignees      []Author  `json:"assignees"`
-}
-
-type Issue struct {
-	Number    int       `json:"number"`
-	Title     string    `json:"title"`
-	Author    Author    `json:"author"`
-	State     string    `json:"state"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	URL       string    `json:"url"`
-	Body      string    `json:"body"`
-	Comments  []Comment `json:"comments"`
-	Labels    []Label   `json:"labels"`
-	Assignees []Author  `json:"assignees"`
-}
 
 type runFunc func(dir string, args ...string) ([]byte, error)
 
@@ -89,7 +43,7 @@ func (c *Client) effectiveRepo(repo string) string {
 
 func runGh(dir string, args ...string) ([]byte, error) {
 	if _, err := exec.LookPath("gh"); err != nil {
-		return nil, ErrGhNotFound
+		return nil, gh.ErrGhNotFound
 	}
 	// gh subcommand args are built internally from typed values (subcommand,
 	// numbers, flags), never from untrusted external input.
@@ -114,54 +68,54 @@ func appendRepo(args []string, repo string) []string {
 	return args
 }
 
-func (c *Client) ListPRs() ([]PR, error) {
+func (c *Client) ListPRs() ([]gh.PR, error) {
 	args := appendRepo([]string{"pr", "list", "--json", prListFields}, c.repo)
 	out, err := c.run(c.dir, args...)
 	if err != nil {
 		return nil, err
 	}
-	var prs []PR
+	var prs []gh.PR
 	if err := json.Unmarshal(out, &prs); err != nil {
 		return nil, fmt.Errorf("parse pr list: %w", err)
 	}
 	return prs, nil
 }
 
-func (c *Client) ListIssues() ([]Issue, error) {
+func (c *Client) ListIssues() ([]gh.Issue, error) {
 	args := appendRepo([]string{"issue", "list", "--json", issueListFields}, c.repo)
 	out, err := c.run(c.dir, args...)
 	if err != nil {
 		return nil, err
 	}
-	var issues []Issue
+	var issues []gh.Issue
 	if err := json.Unmarshal(out, &issues); err != nil {
 		return nil, fmt.Errorf("parse issue list: %w", err)
 	}
 	return issues, nil
 }
 
-func (c *Client) GetPR(repo string, number int) (PR, error) {
+func (c *Client) GetPR(repo string, number int) (gh.PR, error) {
 	args := appendRepo([]string{"pr", "view", strconv.Itoa(number), "--json", prViewFields}, c.effectiveRepo(repo))
 	out, err := c.run(c.dir, args...)
 	if err != nil {
-		return PR{}, err
+		return gh.PR{}, err
 	}
-	var pr PR
+	var pr gh.PR
 	if err := json.Unmarshal(out, &pr); err != nil {
-		return PR{}, fmt.Errorf("parse pr view: %w", err)
+		return gh.PR{}, fmt.Errorf("parse pr view: %w", err)
 	}
 	return pr, nil
 }
 
-func (c *Client) GetIssue(repo string, number int) (Issue, error) {
+func (c *Client) GetIssue(repo string, number int) (gh.Issue, error) {
 	args := appendRepo([]string{"issue", "view", strconv.Itoa(number), "--json", issueViewFields}, c.effectiveRepo(repo))
 	out, err := c.run(c.dir, args...)
 	if err != nil {
-		return Issue{}, err
+		return gh.Issue{}, err
 	}
-	var issue Issue
+	var issue gh.Issue
 	if err := json.Unmarshal(out, &issue); err != nil {
-		return Issue{}, fmt.Errorf("parse issue view: %w", err)
+		return gh.Issue{}, fmt.Errorf("parse issue view: %w", err)
 	}
 	return issue, nil
 }
@@ -225,13 +179,13 @@ func (c *Client) ReopenIssue(repo string, number int) error {
 	return err
 }
 
-func (c *Client) ListLabels(repo string) ([]Label, error) {
+func (c *Client) ListLabels(repo string) ([]gh.Label, error) {
 	args := appendRepo([]string{"label", "list", "--json", "name,color", "--limit", "100"}, c.effectiveRepo(repo))
 	out, err := c.run(c.dir, args...)
 	if err != nil {
 		return nil, err
 	}
-	var labels []Label
+	var labels []gh.Label
 	if err := json.Unmarshal(out, &labels); err != nil {
 		return nil, fmt.Errorf("parse label list: %w", err)
 	}
@@ -250,7 +204,7 @@ func (c *Client) ListAssignees(repo string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var users []Author
+	var users []gh.Author
 	if err := json.Unmarshal(out, &users); err != nil {
 		return nil, fmt.Errorf("parse assignees: %w", err)
 	}

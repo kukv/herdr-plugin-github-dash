@@ -11,32 +11,58 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
 
-	"github.com/kukv/octoscope/internal/ghcli"
+	"github.com/kukv/octoscope/internal/gh"
 	"github.com/kukv/octoscope/internal/i18n"
 )
 
-// DataSource is what the UI needs from the GitHub layer.
-// repo is "owner/repo"; empty string targets the workspace repository.
-type DataSource interface {
-	ListPRs() ([]ghcli.PR, error)
-	ListIssues() ([]ghcli.Issue, error)
-	GetPR(repo string, number int) (ghcli.PR, error)
-	GetIssue(repo string, number int) (ghcli.Issue, error)
-	RepoName() (string, error)
+// prSource is what the screens need for pull requests.
+// repo is "owner/repo"; the empty string targets the workspace repository.
+type prSource interface {
+	ListPRs() ([]gh.PR, error)
+	GetPR(repo string, number int) (gh.PR, error)
 	OpenPRWeb(repo string, number int) error
-	OpenIssueWeb(repo string, number int) error
 	AddPRComment(repo string, number int, body string) error
-	AddIssueComment(repo string, number int, body string) error
 	ClosePR(repo string, number int) error
 	ReopenPR(repo string, number int) error
+	EditPRLabels(repo string, number int, add, remove []string) error
+	EditPRAssignees(repo string, number int, add, remove []string) error
+}
+
+// issueSource mirrors prSource for issues. The two are kept apart rather
+// than merged so that adding a PR-only call cannot silently imply an issue
+// equivalent that GitHub does not offer.
+type issueSource interface {
+	ListIssues() ([]gh.Issue, error)
+	GetIssue(repo string, number int) (gh.Issue, error)
+	OpenIssueWeb(repo string, number int) error
+	AddIssueComment(repo string, number int, body string) error
 	CloseIssue(repo string, number int) error
 	ReopenIssue(repo string, number int) error
-	ListLabels(repo string) ([]ghcli.Label, error)
-	ListAssignees(repo string) ([]string, error)
-	EditPRLabels(repo string, number int, add, remove []string) error
 	EditIssueLabels(repo string, number int, add, remove []string) error
-	EditPRAssignees(repo string, number int, add, remove []string) error
 	EditIssueAssignees(repo string, number int, add, remove []string) error
+}
+
+// repoNamer names the workspace repository. It stands alone because it is
+// the one call that belongs to neither kind.
+type repoNamer interface {
+	RepoName() (string, error)
+}
+
+// candidateSource lists what a picker offers. Labels and assignees belong
+// to the repository, not to a PR or an issue, so this too is kind-free.
+type candidateSource interface {
+	ListLabels(repo string) ([]gh.Label, error)
+	ListAssignees(repo string) ([]string, error)
+}
+
+// DataSource is the union the root model is handed. A command that acts on
+// one kind takes the matching half; a command that picks the kind at run
+// time takes the whole.
+type DataSource interface {
+	prSource
+	issueSource
+	repoNamer
+	candidateSource
 }
 
 type Kind int
@@ -69,10 +95,10 @@ const (
 )
 
 type (
-	prListMsg           []ghcli.PR
-	issueListMsg        []ghcli.Issue
-	prDetailMsg         ghcli.PR
-	issueDetailMsg      ghcli.Issue
+	prListMsg           []gh.PR
+	issueListMsg        []gh.Issue
+	prDetailMsg         gh.PR
+	issueDetailMsg      gh.Issue
 	repoNameMsg         string
 	errorMsg            struct{ err error }
 	commentPostedMsg    struct{}
@@ -81,7 +107,7 @@ type (
 	stateErrorMsg       struct{ err error }
 	pickerCandidatesMsg struct {
 		kind   pickerKind
-		labels []ghcli.Label
+		labels []gh.Label
 		users  []string
 	}
 	pickerAppliedMsg struct{}
@@ -97,8 +123,8 @@ type Model struct {
 	screen        screen
 	tab           tabID
 	cursors       [2]int
-	prs           []ghcli.PR
-	issues        []ghcli.Issue
+	prs           []gh.PR
+	issues        []gh.Issue
 	loaded        [2]bool
 	listLoading   [2]bool
 	detailLoading bool
@@ -187,7 +213,7 @@ func fetchDetail(src DataSource, target Target) tea.Cmd {
 	}
 }
 
-func fetchRepoName(src DataSource) tea.Cmd {
+func fetchRepoName(src repoNamer) tea.Cmd {
 	return func() tea.Msg {
 		name, err := src.RepoName()
 		if err != nil {
@@ -260,7 +286,7 @@ func setState(src DataSource, target Target, closing bool) tea.Cmd {
 	}
 }
 
-func fetchLabelPicker(src DataSource, target Target) tea.Cmd {
+func fetchLabelPicker(src candidateSource, target Target) tea.Cmd {
 	return func() tea.Msg {
 		labels, err := src.ListLabels(target.Repo)
 		if err != nil {
@@ -270,7 +296,7 @@ func fetchLabelPicker(src DataSource, target Target) tea.Cmd {
 	}
 }
 
-func fetchAssigneePicker(src DataSource, target Target) tea.Cmd {
+func fetchAssigneePicker(src candidateSource, target Target) tea.Cmd {
 	return func() tea.Msg {
 		users, err := src.ListAssignees(target.Repo)
 		if err != nil {
@@ -317,7 +343,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.repoName = string(msg)
 		return m, nil
 	case prListMsg:
-		m.prs = []ghcli.PR(msg)
+		m.prs = []gh.PR(msg)
 		m.loaded[tabPRs] = true
 		if m.cursors[tabPRs] >= len(m.prs) {
 			m.cursors[tabPRs] = max(len(m.prs)-1, 0)
@@ -325,7 +351,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.listLoading[tabPRs] = false
 		return m, nil
 	case issueListMsg:
-		m.issues = []ghcli.Issue(msg)
+		m.issues = []gh.Issue(msg)
 		m.loaded[tabIssues] = true
 		if m.cursors[tabIssues] >= len(m.issues) {
 			m.cursors[tabIssues] = max(len(m.issues)-1, 0)
@@ -339,7 +365,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detailLabels = labelNames(msg.Labels)
 		m.detailAssignees = authorLogins(msg.Assignees)
 		m.detailTitle = i18n.Tf("detail.pr_title", map[string]any{"Number": msg.Number, "Title": msg.Title})
-		m.setDetailContent(prMarkdown(ghcli.PR(msg)))
+		m.setDetailContent(prMarkdown(gh.PR(msg)))
 		return m, nil
 	case issueDetailMsg:
 		m.detailLoading = false
@@ -348,7 +374,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detailLabels = labelNames(msg.Labels)
 		m.detailAssignees = authorLogins(msg.Assignees)
 		m.detailTitle = i18n.Tf("detail.issue_title", map[string]any{"Number": msg.Number, "Title": msg.Title})
-		m.setDetailContent(issueMarkdown(ghcli.Issue(msg)))
+		m.setDetailContent(issueMarkdown(gh.Issue(msg)))
 		return m, nil
 	case commentPostedMsg:
 		m.composing = false
@@ -403,7 +429,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case errorMsg:
 		m.screen = screenError
-		if errors.Is(msg.err, ghcli.ErrGhNotFound) {
+		if errors.Is(msg.err, gh.ErrGhNotFound) {
 			m.errText = i18n.T("error.gh_not_found")
 		} else {
 			m.errText = msg.err.Error()
@@ -502,7 +528,7 @@ func (m Model) selectedTarget() (Target, bool) {
 	return Target{Kind: KindIssue, Number: m.issues[m.cursors[tabIssues]].Number}, true
 }
 
-func labelNames(labels []ghcli.Label) []string {
+func labelNames(labels []gh.Label) []string {
 	names := make([]string, len(labels))
 	for i, l := range labels {
 		names[i] = l.Name
@@ -510,7 +536,7 @@ func labelNames(labels []ghcli.Label) []string {
 	return names
 }
 
-func authorLogins(authors []ghcli.Author) []string {
+func authorLogins(authors []gh.Author) []string {
 	logins := make([]string, len(authors))
 	for i, a := range authors {
 		logins[i] = a.Login

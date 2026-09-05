@@ -1,4 +1,4 @@
-package ghcli
+package cli
 
 import (
 	"errors"

@@ -10,7 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/kukv/octoscope/internal/ghcli"
+	"github.com/kukv/octoscope/internal/gh/cli"
 	"github.com/kukv/octoscope/internal/i18n"
 	"github.com/kukv/octoscope/internal/ui"
 )
@@ -39,7 +39,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	p := tea.NewProgram(ui.New(ghcli.New(dir, *repo)))
+	p := tea.NewProgram(ui.New(cli.New(dir, *repo)))
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

@@ -7,7 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/kukv/octoscope/internal/ghcli"
+	"github.com/kukv/octoscope/internal/gh"
 	"github.com/kukv/octoscope/internal/i18n"
 )
 
@@ -153,17 +153,17 @@ func cursorPrefix(selected bool) string {
 	return "  "
 }
 
-func prLine(pr ghcli.PR, now time.Time) string {
+func prLine(pr gh.PR, now time.Time) string {
 	return fmt.Sprintf("#%-5d %s  @%s  %s %s",
 		pr.Number, pr.Title, pr.Author.Login, reviewIcon(pr), relTime(now, pr.UpdatedAt))
 }
 
-func issueLine(issue ghcli.Issue, now time.Time) string {
+func issueLine(issue gh.Issue, now time.Time) string {
 	return fmt.Sprintf("#%-5d %s  @%s  %s",
 		issue.Number, issue.Title, issue.Author.Login, relTime(now, issue.UpdatedAt))
 }
 
-func reviewIcon(pr ghcli.PR) string {
+func reviewIcon(pr gh.PR) string {
 	if pr.IsDraft {
 		return "◌"
 	}
@@ -191,7 +191,7 @@ func relTime(now, t time.Time) string {
 	}
 }
 
-func prMarkdown(pr ghcli.PR) string {
+func prMarkdown(pr gh.PR) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# #%d %s\n\n", pr.Number, pr.Title)
 	fmt.Fprintf(&b, "- **%s**: @%s\n", i18n.T("md.author"), pr.Author.Login)
@@ -209,7 +209,7 @@ func prMarkdown(pr ghcli.PR) string {
 	return b.String()
 }
 
-func issueMarkdown(issue ghcli.Issue) string {
+func issueMarkdown(issue gh.Issue) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# #%d %s\n\n", issue.Number, issue.Title)
 	fmt.Fprintf(&b, "- **%s**: @%s\n", i18n.T("md.author"), issue.Author.Login)
@@ -220,7 +220,7 @@ func issueMarkdown(issue ghcli.Issue) string {
 	return b.String()
 }
 
-func writeCommonMeta(b *strings.Builder, labels []ghcli.Label, updatedAt time.Time) {
+func writeCommonMeta(b *strings.Builder, labels []gh.Label, updatedAt time.Time) {
 	if len(labels) > 0 {
 		names := make([]string, len(labels))
 		for i, l := range labels {
@@ -240,7 +240,7 @@ func writeBody(b *strings.Builder, body string) {
 	}
 }
 
-func writeComments(b *strings.Builder, comments []ghcli.Comment) {
+func writeComments(b *strings.Builder, comments []gh.Comment) {
 	for _, c := range comments {
 		fmt.Fprintf(b, "\n\n---\n\n**@%s** — %s\n\n%s",
 			c.Author.Login, i18n.DateTime(c.CreatedAt), c.Body)

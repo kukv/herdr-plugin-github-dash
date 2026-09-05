@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/octoscope/internal/ghcli"
+	"github.com/kukv/octoscope/internal/gh"
 )
 
 func TestRelTime(t *testing.T) {
@@ -28,14 +28,14 @@ func TestRelTime(t *testing.T) {
 
 func TestReviewIcon(t *testing.T) {
 	cases := []struct {
-		pr   ghcli.PR
+		pr   gh.PR
 		want string
 	}{
-		{ghcli.PR{IsDraft: true}, "◌"},
-		{ghcli.PR{ReviewDecision: "APPROVED"}, "✓"},
-		{ghcli.PR{ReviewDecision: "CHANGES_REQUESTED"}, "×"},
-		{ghcli.PR{ReviewDecision: "REVIEW_REQUIRED"}, "•"},
-		{ghcli.PR{}, "•"},
+		{gh.PR{IsDraft: true}, "◌"},
+		{gh.PR{ReviewDecision: "APPROVED"}, "✓"},
+		{gh.PR{ReviewDecision: "CHANGES_REQUESTED"}, "×"},
+		{gh.PR{ReviewDecision: "REVIEW_REQUIRED"}, "•"},
+		{gh.PR{}, "•"},
 	}
 	for _, c := range cases {
 		if got := reviewIcon(c.pr); got != c.want {
@@ -45,14 +45,14 @@ func TestReviewIcon(t *testing.T) {
 }
 
 func TestPRMarkdownContainsMetaBodyAndComments(t *testing.T) {
-	pr := ghcli.PR{
-		Number: 12, Title: "feat: pane", Author: ghcli.Author{Login: "kukv"},
+	pr := gh.PR{
+		Number: 12, Title: "feat: pane", Author: gh.Author{Login: "kukv"},
 		State: "OPEN", IsDraft: true, ReviewDecision: "REVIEW_REQUIRED",
-		Labels: []ghcli.Label{{Name: "Kind: Feature"}},
+		Labels: []gh.Label{{Name: "Kind: Feature"}},
 		Body:   "body text",
-		Comments: []ghcli.Comment{
+		Comments: []gh.Comment{
 			{
-				Author: ghcli.Author{Login: "bob"}, Body: "comment text",
+				Author: gh.Author{Login: "bob"}, Body: "comment text",
 				CreatedAt: time.Date(2026, 7, 11, 11, 0, 0, 0, time.UTC),
 			},
 		},
@@ -69,7 +69,7 @@ func TestPRMarkdownContainsMetaBodyAndComments(t *testing.T) {
 }
 
 func TestIssueMarkdownEmptyBody(t *testing.T) {
-	md := issueMarkdown(ghcli.Issue{Number: 3, Title: "an issue"})
+	md := issueMarkdown(gh.Issue{Number: 3, Title: "an issue"})
 	if !strings.Contains(md, "_no description_") {
 		t.Errorf("markdown missing empty-body placeholder:\n%s", md)
 	}
