@@ -1,5 +1,7 @@
 # octoscope
 
+[日本語](README.ja.md)
+
 A terminal dashboard for GitHub pull requests and issues.
 
 octoscope = **Octo**cat + **-scope**: a telescope for looking over your GitHub work.
