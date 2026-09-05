@@ -109,8 +109,8 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 **Files:**
 - Create: `cmd/octoscope/main.go`
 - Delete: `main.go`、`main_test.go`、`internal/herdrctx/herdrctx.go`、`internal/herdrctx/herdrctx_test.go`、`herdr-plugin.toml`、`open.sh`、`run.sh`
-- Modify: `internal/ui/ui.go`（`New` のシグネチャ、`Target` の削除）
-- Modify: `internal/ui/ui_test.go`（`ui.New` の呼び出し箇所）
+- Modify: `internal/ui/ui.go:145`（`New` のシグネチャと起動時の詳細画面分岐）
+- Modify: `internal/ui/ui_test.go`（`ui.New` の呼び出し箇所、および `:307` 付近の起動時詳細テスト）
 
 **Interfaces:**
 - Consumes: Task 1 のモジュールパス
@@ -118,13 +118,27 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   - `ui.New(ds DataSource) Model` — 第 2 引数の `*Target` を削除した形
   - `ui.NewError(text string) Model` — 変更なし
   - `ghcli.New(dir string) *Client` — 変更なし（Task 3 で変わる）
+  - `ui.Target` / `ui.Kind` / `ui.KindPR` / `ui.KindIssue` — **そのまま残る**
 
-**背景:** `Target` と `parseTarget` は Herdr のリンクハンドラ（`GITHUB_DASH_URL` 環境変数）専用の入口だった。リンクハンドラを廃止するとこの経路は誰も使わなくなるため、あわせて削除する。ただし `DataSource` の各メソッドが持つ `repo string` 引数は **残す** — Phase 1 のリポジトリ横断表示がこの引数を使う。
+**背景:** `parseTarget` と `GITHUB_DASH_URL` は Herdr のリンクハンドラ専用の入口であり、リンクハンドラを廃止すると誰も使わなくなる。
 
-- [ ] **Step 1: `Target` を参照している箇所を洗い出す**
+一方で **`Target` 型そのものは Herdr 固有ではない**。`Model.detailTarget` が「いま開いている PR / Issue はどれか」を保持しており、`render.go:111` の `m.detailTarget.Kind == KindPR` をはじめ、詳細画面の再取得（`fetchDetail`）、ブラウザで開く（`openWeb`）、close/reopen の分岐がすべてこのフィールドを使っている。**削除してはいけない。**
 
-Run: `grep -rn 'Target\|parseTarget\|GITHUB_DASH_URL\|herdrctx' --include='*.go' --include='*.toml' --include='*.sh' .`
-Expected: `main.go`、`main_test.go`、`internal/ui/ui.go`、`internal/ui/ui_test.go`、`internal/herdrctx/`、`herdr-plugin.toml`、`run.sh` が挙がる。この一覧が本タスクで触る範囲
+このタスクで消すのは次の 3 つだけ:
+
+1. `New` の第 2 引数 `initial *Target`
+2. その引数が有効なときに起動直後から詳細画面を開く分岐（`internal/ui/ui.go:145` 付近の `m.detailTarget = *initial` と、続く `screenDetail` への遷移および `:171` の初期 `fetchDetail`）
+3. `main.go` の `parseTarget` と `main_test.go`
+
+`DataSource` の各メソッドが持つ `repo string` 引数も **残す** — Phase 1 のリポジトリ横断表示がこの引数を使う。
+
+- [ ] **Step 1: 影響範囲を洗い出す**
+
+Run: `grep -rn 'parseTarget\|GITHUB_DASH_URL\|herdrctx' --include='*.go' --include='*.toml' --include='*.sh' .`
+Expected: `main.go`、`main_test.go`、`internal/herdrctx/`、`herdr-plugin.toml`、`run.sh` が挙がる
+
+Run: `grep -rn 'detailTarget\|KindPR\|KindIssue' --include='*.go' internal/`
+Expected: `render.go`、`ui.go`、`ui_test.go` に多数。**これらは残す対象**であることを確認する
 
 - [ ] **Step 2: Herdr 資産を削除する**
 
@@ -164,19 +178,22 @@ func main() {
 }
 ```
 
-- [ ] **Step 4: `ui.New` から `Target` を取り除く**
+- [ ] **Step 4: `ui.New` から起動時ターゲットの引数を取り除く**
 
-`internal/ui/ui.go` の以下を変更する。
+`internal/ui/ui.go` を次のように変更する。**型定義（`Kind`、`KindPR`、`KindIssue`、`Target`）には触らない。**
 
-1. `Kind`、`KindPR`、`KindIssue`、`Target` 型の定義を削除する
-2. `New` のシグネチャを `func New(ds DataSource) Model` にし、`target` 引数を使っていた初期化分岐（起動直後に詳細画面を開く経路）を削除して、常にリスト画面から始まるようにする
+1. `New` のシグネチャを `func New(ds DataSource) Model` にする
+2. `:145` 付近の `if initial != nil { m.detailTarget = *initial; ... }` の分岐を削除し、常に `screenList` から始まるようにする
+3. `:171` 付近で、その分岐が有効なときだけ積んでいた初期 `fetchDetail` の `cmds` 追加を削除する
 
-`Kind` は `Target` 以外から参照されていないため、あわせて削除する。参照が残っていないことは次のステップで確認する。
+`m.detailTarget` フィールド自体は残す。リストから `enter` で詳細を開くときに `:481` で代入される。
 
 - [ ] **Step 5: コンパイルが通るまで呼び出し側を直す**
 
 Run: `go build ./... && go vet ./...`
 Expected: エラーなし。`internal/ui/ui_test.go` の `ui.New(fake, nil)` は `ui.New(fake)` に直す
+
+`internal/ui/ui_test.go:307` 付近の「起動直後に別リポジトリの PR を開く」テスト（`"external pr"` を検査しているもの）は、削除した機能を検査しているため**テストごと削除する**。リストから `enter` で詳細を開くテストは残す。
 
 - [ ] **Step 6: テストが通ることを確認する**
 
@@ -415,6 +432,8 @@ Run: `cd /tmp && go run github.com/kukv/octoscope/cmd/octoscope --repo kukv/herd
 Expected: `/tmp` は git リポジトリではないが、指定したリポジトリの PR / Issue が表示される。
 
 （`go run` がモジュール外で動かない場合は、先に `go build -o /tmp/octoscope ./cmd/octoscope` してから `cd /tmp && ./octoscope --repo kukv/herdr-plugin-github-dash` とする。リポジトリ名は GitHub 上のリネームが済むまで旧名のままであることに注意。）
+
+**`--repo` も git remote も無い場合の挙動:** `gh` が返すエラー（`no git remotes found`）をそのままエラー画面に出す。既存の `internal/ui/ui_test.go:232` がこの経路を検査しているため、Phase 0 では変更しない。spec §3.4 の 3 番目（リポジトリ非依存の Work タブから開始する）は Phase 1 で実装する。
 
 - [ ] **Step 8: `make check` とコミット**
 
@@ -991,7 +1010,7 @@ func (m Model) confirmView() string {
 }
 ```
 
-**注意:** Task 2 で `Kind` / `Target` を削除した場合、`m.detailTarget.Kind` は使えない。その場合は Model が PR / Issue の別をどう保持しているかに合わせて分岐する（`m.tab == tabPRs` など、既存コードの持ち方に従うこと）。
+`m.detailTarget.Kind` は Task 2 の変更後も残っているため、上のコードはそのまま使える。
 
 `relTime` は複数形を使う:
 
@@ -1040,8 +1059,10 @@ Expected: 何も出ない（`exit=1`）
 
 Create `internal/ui/i18n_test.go`:
 
+既存の `internal/ui/ui_test.go` は非公開フィールド（`m.postErr` など）を読むため `package ui` である。新しいテストも同じパッケージにしないとヘルパーが見えない。
+
 ```go
-package ui_test
+package ui
 
 import (
 	"strings"
@@ -1207,11 +1228,25 @@ changelog:
       - "^chore\\(deps\\):"
 ```
 
-- [ ] **Step 4: 設定とクロスコンパイルを検証する**
+- [ ] **Step 4: LICENSE を用意する**
 
-Run: `go tool -n goreleaser 2>/dev/null || echo "install goreleaser first"`
+このリポジトリには LICENSE ファイルが無い（`ls LICENSE*` で確認できる）。公開リポジトリでバイナリを配布する以上ライセンスは必要で、`.goreleaser.yaml` の `files:` も `LICENSE*` を同梱する指定になっている。
 
-GoReleaser が入っていない場合は `mise` か `go install github.com/goreleaser/goreleaser/v2@latest` で入れる。
+どのライセンスにするかは**ユーザーに確認する**。決まったら:
+
+```bash
+gh api /licenses/mit --jq .body > LICENSE   # MIT の場合
+```
+
+生成後、`[year]` と `[fullname]` のプレースホルダを実際の値に置き換える。確認が取れるまで次のステップに進まない。
+
+- [ ] **Step 5: 設定とクロスコンパイルを検証する**
+
+GoReleaser が入っているか確認する。
+
+Run: `goreleaser --version || echo "install goreleaser first"`
+
+入っていない場合は `mise` か `go install github.com/goreleaser/goreleaser/v2@latest` で入れる。
 
 Run: `goreleaser check`
 Expected: `1 configuration file(s) validated`
@@ -1219,11 +1254,11 @@ Expected: `1 configuration file(s) validated`
 Run: `GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/octoscope && GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/octoscope && GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/octoscope`
 Expected: 3 つともエラーなし
 
-- [ ] **Step 5: `dist/` を無視する**
+- [ ] **Step 6: `dist/` を無視する**
 
 `.gitignore` の末尾に `dist/` を足す。
 
-- [ ] **Step 6: `Makefile` に検証ターゲットを足す**
+- [ ] **Step 7: `Makefile` に検証ターゲットを足す**
 
 ```makefile
 # Validate the release configuration and cross-compilation (mirrors release CI).
@@ -1236,7 +1271,7 @@ release-check:
 
 `.PHONY` の行にも `release-check` を足すこと。
 
-- [ ] **Step 7: リリースワークフローの action SHA を取得する**
+- [ ] **Step 8: リリースワークフローの action SHA を取得する**
 
 action はタグではなく full-length commit SHA でピンする必要がある（Global Constraints）。SHA を記憶で書かず、必ず取得すること。
 
@@ -1252,7 +1287,7 @@ done
 
 `actions/checkout` と `actions/setup-go` は `.github/workflows/ci.yaml` に既にピン済みの SHA があるため、そちらと一致することを確認する。`goreleaser-action` の最新タグは上のコマンドで拒否されたら `gh api repos/goreleaser/goreleaser-action/releases/latest --jq .tag_name` で調べ直す。
 
-- [ ] **Step 8: リリースワークフローを書く**
+- [ ] **Step 9: リリースワークフローを書く**
 
 Create `.github/workflows/release.yaml`。`<SHA>` は Step 7 で取得した値に置き換える。
 
@@ -1291,7 +1326,7 @@ jobs:
 
 `fetch-depth: 0` は GoReleaser が changelog を作るために必要。`persist-credentials: false` は既存ワークフローと揃える（GoReleaser は `GITHUB_TOKEN` を env から読む）。
 
-- [ ] **Step 9: 検証**
+- [ ] **Step 10: 検証**
 
 Run: `make release-check`
 Expected: 通る
@@ -1300,7 +1335,7 @@ Run: `gh workflow view release.yaml 2>/dev/null || echo "not pushed yet, fine"`
 
 ワークフロー本体の実行はタグを push したときのみ。Phase 0 の完了時点では push しない（リポジトリのリネームが先）。
 
-- [ ] **Step 10: `make check` とコミット**
+- [ ] **Step 11: `make check` とコミット**
 
 ```bash
 make check
@@ -1487,7 +1522,7 @@ Expected: Release ワークフローが走り、6 つのアーカイブと `chec
 | `internal/i18n` の土台と全文字列の移行（§6） | Task 4 |
 | GoReleaser とリリースワークフロー | Task 5 |
 | README の全面書き換え | Task 6 |
-| 検証: 3 OS のクロスコンパイル | Task 5 Step 4 |
+| 検証: 3 OS のクロスコンパイル | Task 5 Step 5 |
 | 検証: 既存ビューが従来どおり動く | Task 2 Step 8、Task 3 Step 7 |
 | 検証: `--lang ja` / `--lang en` の両方でテストが通る | Task 4 Step 11 |
 
