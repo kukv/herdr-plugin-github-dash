@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"slices"
@@ -23,7 +24,7 @@ type fakeRun struct {
 	err  error
 }
 
-func (f *fakeRun) run(dir string, args ...string) ([]byte, error) {
+func (f *fakeRun) run(_ context.Context, dir string, args ...string) ([]byte, error) {
 	f.dir = dir
 	f.args = args
 	return f.out, f.err
@@ -324,7 +325,7 @@ func TestEditItemsError(t *testing.T) {
 func TestClientUsesDefaultRepo(t *testing.T) {
 	var got []string
 	c := New("/tmp", "kukv/octoscope")
-	c.run = func(_ string, args ...string) ([]byte, error) {
+	c.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		got = args
 		return []byte("[]"), nil
 	}
@@ -340,7 +341,7 @@ func TestClientUsesDefaultRepo(t *testing.T) {
 func TestPerCallRepoOverridesDefault(t *testing.T) {
 	var got []string
 	c := New("/tmp", "kukv/octoscope")
-	c.run = func(_ string, args ...string) ([]byte, error) {
+	c.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		got = args
 		return []byte("{}"), nil
 	}
@@ -355,7 +356,7 @@ func TestPerCallRepoOverridesDefault(t *testing.T) {
 func TestRepoNameUsesPositionalArgument(t *testing.T) {
 	var got []string
 	c := New("/tmp", "kukv/octoscope")
-	c.run = func(_ string, args ...string) ([]byte, error) {
+	c.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		got = args
 		return []byte(`{"nameWithOwner":"kukv/octoscope"}`), nil
 	}
@@ -371,7 +372,7 @@ func TestRepoNameUsesPositionalArgument(t *testing.T) {
 func TestListAssigneesBuildsAPIPathFromDefaultRepo(t *testing.T) {
 	var got []string
 	c := New("/tmp", "kukv/octoscope")
-	c.run = func(_ string, args ...string) ([]byte, error) {
+	c.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		got = args
 		return []byte("[]"), nil
 	}

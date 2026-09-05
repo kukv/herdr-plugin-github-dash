@@ -3,6 +3,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -18,7 +19,7 @@ const (
 	issueViewFields = issueListFields + ",body,comments,assignees"
 )
 
-type runFunc func(dir string, args ...string) ([]byte, error)
+type runFunc func(ctx context.Context, dir string, args ...string) ([]byte, error)
 
 // Client runs gh commands in a fixed directory, against a fixed repository.
 type Client struct {
@@ -41,13 +42,13 @@ func (c *Client) effectiveRepo(repo string) string {
 	return c.repo
 }
 
-func runGh(dir string, args ...string) ([]byte, error) {
+func runGh(ctx context.Context, dir string, args ...string) ([]byte, error) {
 	if _, err := exec.LookPath("gh"); err != nil {
 		return nil, gh.ErrGhNotFound
 	}
 	// gh subcommand args are built internally from typed values (subcommand,
 	// numbers, flags), never from untrusted external input.
-	cmd := exec.Command("gh", args...)
+	cmd := exec.CommandContext(ctx, "gh", args...)
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -70,7 +71,7 @@ func appendRepo(args []string, repo string) []string {
 
 func (c *Client) ListPRs() ([]gh.PR, error) {
 	args := appendRepo([]string{"pr", "list", "--json", prListFields}, c.repo)
-	out, err := c.run(c.dir, args...)
+	out, err := c.run(context.Background(), c.dir, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +84,7 @@ func (c *Client) ListPRs() ([]gh.PR, error) {
 
 func (c *Client) ListIssues() ([]gh.Issue, error) {
 	args := appendRepo([]string{"issue", "list", "--json", issueListFields}, c.repo)
-	out, err := c.run(c.dir, args...)
+	out, err := c.run(context.Background(), c.dir, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +97,7 @@ func (c *Client) ListIssues() ([]gh.Issue, error) {
 
 func (c *Client) GetPR(repo string, number int) (gh.PR, error) {
 	args := appendRepo([]string{"pr", "view", strconv.Itoa(number), "--json", prViewFields}, c.effectiveRepo(repo))
-	out, err := c.run(c.dir, args...)
+	out, err := c.run(context.Background(), c.dir, args...)
 	if err != nil {
 		return gh.PR{}, err
 	}
@@ -109,7 +110,7 @@ func (c *Client) GetPR(repo string, number int) (gh.PR, error) {
 
 func (c *Client) GetIssue(repo string, number int) (gh.Issue, error) {
 	args := appendRepo([]string{"issue", "view", strconv.Itoa(number), "--json", issueViewFields}, c.effectiveRepo(repo))
-	out, err := c.run(c.dir, args...)
+	out, err := c.run(context.Background(), c.dir, args...)
 	if err != nil {
 		return gh.Issue{}, err
 	}
@@ -126,7 +127,7 @@ func (c *Client) RepoName() (string, error) {
 		args = append(args, c.repo)
 	}
 	args = append(args, "--json", "nameWithOwner")
-	out, err := c.run(c.dir, args...)
+	out, err := c.run(context.Background(), c.dir, args...)
 	if err != nil {
 		return "", err
 	}
@@ -140,48 +141,48 @@ func (c *Client) RepoName() (string, error) {
 }
 
 func (c *Client) OpenPRWeb(repo string, number int) error {
-	_, err := c.run(c.dir, appendRepo([]string{"pr", "view", strconv.Itoa(number), "--web"}, c.effectiveRepo(repo))...)
+	_, err := c.run(context.Background(), c.dir, appendRepo([]string{"pr", "view", strconv.Itoa(number), "--web"}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) OpenIssueWeb(repo string, number int) error {
-	_, err := c.run(c.dir, appendRepo([]string{"issue", "view", strconv.Itoa(number), "--web"}, c.effectiveRepo(repo))...)
+	_, err := c.run(context.Background(), c.dir, appendRepo([]string{"issue", "view", strconv.Itoa(number), "--web"}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) AddPRComment(repo string, number int, body string) error {
-	_, err := c.run(c.dir, appendRepo([]string{"pr", "comment", strconv.Itoa(number), "--body", body}, c.effectiveRepo(repo))...)
+	_, err := c.run(context.Background(), c.dir, appendRepo([]string{"pr", "comment", strconv.Itoa(number), "--body", body}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) AddIssueComment(repo string, number int, body string) error {
-	_, err := c.run(c.dir, appendRepo([]string{"issue", "comment", strconv.Itoa(number), "--body", body}, c.effectiveRepo(repo))...)
+	_, err := c.run(context.Background(), c.dir, appendRepo([]string{"issue", "comment", strconv.Itoa(number), "--body", body}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) ClosePR(repo string, number int) error {
-	_, err := c.run(c.dir, appendRepo([]string{"pr", "close", strconv.Itoa(number)}, c.effectiveRepo(repo))...)
+	_, err := c.run(context.Background(), c.dir, appendRepo([]string{"pr", "close", strconv.Itoa(number)}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) ReopenPR(repo string, number int) error {
-	_, err := c.run(c.dir, appendRepo([]string{"pr", "reopen", strconv.Itoa(number)}, c.effectiveRepo(repo))...)
+	_, err := c.run(context.Background(), c.dir, appendRepo([]string{"pr", "reopen", strconv.Itoa(number)}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) CloseIssue(repo string, number int) error {
-	_, err := c.run(c.dir, appendRepo([]string{"issue", "close", strconv.Itoa(number)}, c.effectiveRepo(repo))...)
+	_, err := c.run(context.Background(), c.dir, appendRepo([]string{"issue", "close", strconv.Itoa(number)}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) ReopenIssue(repo string, number int) error {
-	_, err := c.run(c.dir, appendRepo([]string{"issue", "reopen", strconv.Itoa(number)}, c.effectiveRepo(repo))...)
+	_, err := c.run(context.Background(), c.dir, appendRepo([]string{"issue", "reopen", strconv.Itoa(number)}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) ListLabels(repo string) ([]gh.Label, error) {
 	args := appendRepo([]string{"label", "list", "--json", "name,color", "--limit", "100"}, c.effectiveRepo(repo))
-	out, err := c.run(c.dir, args...)
+	out, err := c.run(context.Background(), c.dir, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +201,7 @@ func (c *Client) ListAssignees(repo string) ([]string, error) {
 	if r := c.effectiveRepo(repo); r != "" {
 		path = "repos/" + r + "/assignees?per_page=100"
 	}
-	out, err := c.run(c.dir, "api", path)
+	out, err := c.run(context.Background(), c.dir, "api", path)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +224,7 @@ func (c *Client) editItems(kindCmd, repo string, number int, add, remove []strin
 	for _, v := range remove {
 		args = append(args, removeFlag, v)
 	}
-	_, err := c.run(c.dir, appendRepo(args, c.effectiveRepo(repo))...)
+	_, err := c.run(context.Background(), c.dir, appendRepo(args, c.effectiveRepo(repo))...)
 	return err
 }
 
