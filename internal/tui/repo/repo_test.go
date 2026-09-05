@@ -1,0 +1,362 @@
+package repo
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+	"golang.org/x/text/language"
+
+	"github.com/kukv/octoscope/internal/gh"
+	"github.com/kukv/octoscope/internal/i18n"
+)
+
+// fakeSource implements Source and records calls.
+type fakeSource struct {
+	prs      []gh.PR
+	issues   []gh.Issue
+	err      error
+	webCalls []string // "pr:<repo>:<n>" / "issue:<repo>:<n>"
+}
+
+func (f *fakeSource) ListPRs(ctx context.Context) ([]gh.PR, error) { return f.prs, f.err }
+
+func (f *fakeSource) ListIssues(ctx context.Context) ([]gh.Issue, error) {
+	return f.issues, f.err
+}
+
+func (f *fakeSource) RepoName(ctx context.Context) (string, error) { return "kukv/demo", f.err }
+
+func (f *fakeSource) OpenPRWeb(repo string, n int) error {
+	f.webCalls = append(f.webCalls, "pr:"+repo+":"+itoa(n))
+	return nil
+}
+
+func (f *fakeSource) OpenIssueWeb(repo string, n int) error {
+	f.webCalls = append(f.webCalls, "issue:"+repo+":"+itoa(n))
+	return nil
+}
+
+func itoa(n int) string { return string(rune('0' + n)) } // tests only use n < 10
+
+func samplePRs() []gh.PR {
+	return []gh.PR{
+		{
+			Number: 1, Title: "first pr", Author: gh.Author{Login: "kukv"},
+			UpdatedAt: time.Now(), ReviewDecision: "APPROVED",
+		},
+		{
+			Number: 2, Title: "second pr", Author: gh.Author{Login: "bob"},
+			UpdatedAt: time.Now(),
+		},
+	}
+}
+
+func key(s string) tea.KeyPressMsg {
+	switch s {
+	case "tab":
+		return tea.KeyPressMsg{Code: tea.KeyTab}
+	case "enter":
+		return tea.KeyPressMsg{Code: tea.KeyEnter}
+	default:
+		return tea.KeyPressMsg{Code: []rune(s)[0], Text: s}
+	}
+}
+
+// loadedModel returns a Model with the PR list already loaded.
+func loadedModel(f *fakeSource) Model {
+	m := New(f)
+	m, _ = m.Update(prListMsg(f.prs))
+	return m
+}
+
+func TestPRListRenders(t *testing.T) {
+	f := &fakeSource{prs: samplePRs()}
+	m := loadedModel(f)
+	view := m.View()
+	for _, want := range []string{"first pr", "second pr", "@kukv", "#1"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("view missing %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestRepoNameShownInHeader(t *testing.T) {
+	f := &fakeSource{prs: samplePRs()}
+	m := New(f)
+	m, _ = m.Update(repoNameMsg("kukv/demo"))
+	if !strings.Contains(m.View(), "kukv/demo") {
+		t.Errorf("header missing the repository name:\n%s", m.View())
+	}
+}
+
+func TestRepoNameFailureIsIgnored(t *testing.T) {
+	f := &fakeSource{err: errors.New("gh repo: no git remotes found")}
+	msg := fetchRepoName(f)()
+	if got, ok := msg.(repoNameMsg); !ok || got != "" {
+		t.Errorf("msg = %#v, want an empty repoNameMsg (the header name is not worth an error screen)", msg)
+	}
+}
+
+func TestEmptyPRList(t *testing.T) {
+	f := &fakeSource{}
+	m := loadedModel(f)
+	if !strings.Contains(m.View(), "No open pull requests") {
+		t.Errorf("view missing empty state:\n%s", m.View())
+	}
+}
+
+func TestLoadingShowsLoadingText(t *testing.T) {
+	m := New(&fakeSource{prs: samplePRs()})
+	if !strings.Contains(m.View(), "loading...") {
+		t.Errorf("view missing the loading text before the list arrives:\n%s", m.View())
+	}
+}
+
+func TestCursorMovesAndClamps(t *testing.T) {
+	f := &fakeSource{prs: samplePRs()}
+	m := loadedModel(f)
+	for _, k := range []string{"j", "j", "j"} { // only two items: it stops at the end
+		m, _ = m.Update(key(k))
+	}
+	if m.cursors[tabPRs] != 1 {
+		t.Errorf("cursor = %d, want 1", m.cursors[tabPRs])
+	}
+	m, _ = m.Update(key("k"))
+	if m.cursors[tabPRs] != 0 {
+		t.Errorf("cursor = %d, want 0", m.cursors[tabPRs])
+	}
+}
+
+func TestTabSwitchLoadsIssues(t *testing.T) {
+	f := &fakeSource{issues: []gh.Issue{{Number: 3, Title: "an issue"}}}
+	m := loadedModel(f)
+	m, cmd := m.Update(key("tab"))
+	if m.tab != tabIssues || cmd == nil {
+		t.Fatalf("tab = %v, cmd = %v; want tabIssues with fetch cmd", m.tab, cmd)
+	}
+	m, _ = m.Update(cmd()) // run the fetch synchronously and feed the result back
+	if !strings.Contains(m.View(), "an issue") {
+		t.Errorf("view missing issue:\n%s", m.View())
+	}
+}
+
+func TestFetchFailureBecomesErrorMsg(t *testing.T) {
+	f := &fakeSource{err: errors.New("gh pr: no git remotes found")}
+	m := New(f)
+	_, cmd := m.Update(fetchList(f, tabPRs)())
+	if cmd == nil {
+		t.Fatal("cmd = nil after a failed fetch, want ErrorMsg cmd")
+	}
+	msg, ok := cmd().(ErrorMsg)
+	if !ok {
+		t.Fatalf("msg = %T, want ErrorMsg", cmd())
+	}
+	if !strings.Contains(msg.Err.Error(), "no git remotes found") {
+		t.Errorf("Err = %v, want the source's error", msg.Err)
+	}
+}
+
+func TestEnterAsksTheParentForTheDetail(t *testing.T) {
+	f := &fakeSource{prs: samplePRs()}
+	m := loadedModel(f)
+	m, _ = m.Update(key("j")) // second PR
+	_, cmd := m.Update(key("enter"))
+	if cmd == nil {
+		t.Fatal("cmd = nil, want OpenDetailMsg cmd")
+	}
+	msg, ok := cmd().(OpenDetailMsg)
+	if !ok {
+		t.Fatalf("msg = %T, want OpenDetailMsg", cmd())
+	}
+	if msg.Ref != (gh.ItemRef{Kind: gh.ItemPR, Number: 2}) {
+		t.Errorf("Ref = %+v, want the PR under the cursor", msg.Ref)
+	}
+}
+
+func TestEnterOnAnIssueCarriesTheIssueKind(t *testing.T) {
+	f := &fakeSource{issues: []gh.Issue{{Number: 3, Title: "an issue"}}}
+	m := loadedModel(f)
+	m, cmd := m.Update(key("tab"))
+	m, _ = m.Update(cmd())
+	_, cmd = m.Update(key("enter"))
+	if cmd == nil {
+		t.Fatal("cmd = nil, want OpenDetailMsg cmd")
+	}
+	msg, ok := cmd().(OpenDetailMsg)
+	if !ok {
+		t.Fatalf("msg = %T, want OpenDetailMsg", cmd())
+	}
+	if msg.Ref != (gh.ItemRef{Kind: gh.ItemIssue, Number: 3}) {
+		t.Errorf("Ref = %+v, want the issue under the cursor", msg.Ref)
+	}
+}
+
+func TestEnterOnEmptyListDoesNothing(t *testing.T) {
+	m := loadedModel(&fakeSource{})
+	_, cmd := m.Update(key("enter"))
+	if cmd != nil {
+		t.Errorf("cmd = non-nil on an empty list, want nil")
+	}
+}
+
+func TestOOpensBrowserForSelection(t *testing.T) {
+	f := &fakeSource{prs: samplePRs()}
+	m := loadedModel(f)
+	_, cmd := m.Update(key("o"))
+	if cmd == nil {
+		t.Fatal("cmd = nil, want openWeb cmd")
+	}
+	cmd()
+	if len(f.webCalls) != 1 || f.webCalls[0] != "pr::1" {
+		t.Errorf("webCalls = %v, want [pr::1]", f.webCalls)
+	}
+}
+
+func TestRefreshRefetchesTheCurrentTab(t *testing.T) {
+	f := &fakeSource{prs: samplePRs()}
+	m := loadedModel(f)
+	m, cmd := m.Update(key("r"))
+	if !m.loading[tabPRs] || cmd == nil {
+		t.Fatalf("loading = %v, cmd = %v; want loading with fetch cmd", m.loading[tabPRs], cmd)
+	}
+	if _, ok := cmd().(prListMsg); !ok {
+		t.Errorf("msg = %T, want prListMsg", cmd())
+	}
+}
+
+// TestRefreshThenTabSwitchClearsCorrectLoading reproduces the stuck-spinner
+// bug: pressing r on the PRs tab, then tab to the already-loaded Issues tab
+// before the PR fetch returns, must not leave Issues stuck on "loading..."
+// when the late prListMsg finally arrives.
+func TestRefreshThenTabSwitchClearsCorrectLoading(t *testing.T) {
+	f := &fakeSource{prs: samplePRs(), issues: []gh.Issue{{Number: 3, Title: "an issue"}}}
+	m := loadedModel(f)
+	m, _ = m.Update(issueListMsg(f.issues)) // Issues tab already loaded once before
+
+	m, refreshCmd := m.Update(key("r")) // refresh PRs; fetch is still "in flight"
+	if refreshCmd == nil {
+		t.Fatal("cmd = nil, want fetch cmd for r")
+	}
+
+	m, tabCmd := m.Update(key("tab")) // switch to Issues before the refresh returns
+	if m.tab != tabIssues {
+		t.Fatalf("tab = %v, want tabIssues", m.tab)
+	}
+	if tabCmd != nil {
+		t.Fatalf("switching to an already-loaded tab issued cmd = %v, want nil", tabCmd)
+	}
+	if view := m.View(); strings.Contains(view, "loading...") || !strings.Contains(view, "an issue") {
+		t.Errorf("Issues view should render items immediately, got:\n%s", view)
+	}
+
+	m, _ = m.Update(refreshCmd()) // late prListMsg arrives while Issues is visible
+	if view := m.View(); strings.Contains(view, "loading...") || !strings.Contains(view, "an issue") {
+		t.Errorf("Issues view got stuck on the loading text after a late prListMsg, got:\n%s", view)
+	}
+
+	m, _ = m.Update(key("tab")) // switch back to PRs
+	if view := m.View(); strings.Contains(view, "loading...") || !strings.Contains(view, "first pr") {
+		t.Errorf("PRs view stuck loading or missing refreshed items, got:\n%s", view)
+	}
+}
+
+func TestCursorClampsWhenTheListShrinks(t *testing.T) {
+	f := &fakeSource{prs: samplePRs()}
+	m := loadedModel(f)
+	m, _ = m.Update(key("j")) // cursor on the second PR
+	m, _ = m.Update(prListMsg(samplePRs()[:1]))
+	if m.cursors[tabPRs] != 0 {
+		t.Errorf("cursor = %d after the list shrank, want 0", m.cursors[tabPRs])
+	}
+}
+
+// TestJapaneseListViewFitsTheWidth guards that the Japanese catalog strings
+// fit within 80 display columns; View renders them verbatim and does no
+// rune-counting or truncation of its own.
+func TestJapaneseListViewFitsTheWidth(t *testing.T) {
+	t.Cleanup(func() { i18n.SetLanguage(language.English) })
+	i18n.SetLanguage(language.Japanese)
+
+	const width = 80
+	m := loadedModel(&fakeSource{prs: samplePRs()})
+
+	for _, line := range strings.Split(m.View(), "\n") {
+		if w := ansi.StringWidth(line); w > width {
+			t.Errorf("line is %d columns wide, want <= %d: %q", w, width, line)
+		}
+	}
+}
+
+// TestNoUnresolvedIDsInRenderedViews guards spec §6.5. It renders each of the
+// list's screens in both languages and fails when a message ID the code asked
+// for is missing from that language's catalog. Walking i18n.IDs() cannot catch
+// this: it only proves the catalog can resolve its own IDs, never that the IDs
+// the code spells match them.
+func TestNoUnresolvedIDsInRenderedViews(t *testing.T) {
+	t.Cleanup(func() { i18n.SetLanguage(language.English) })
+
+	for _, lang := range []language.Tag{language.English, language.Japanese} {
+		i18n.SetLanguage(lang)
+		for name, view := range renderEveryScreen() {
+			t.Run(lang.String()+"/"+name, func(t *testing.T) {
+				i18n.AssertNoUnresolvedIDs(t, view)
+			})
+		}
+	}
+}
+
+func renderEveryScreen() map[string]string {
+	f := &fakeSource{prs: samplePRs(), issues: []gh.Issue{{Number: 3, Title: "an issue"}}}
+	list := loadedModel(f)
+	issues, cmd := list.Update(key("tab"))
+	issues, _ = issues.Update(cmd())
+	empty := loadedModel(&fakeSource{})
+
+	return map[string]string{
+		"list_prs":    list.View(),
+		"list_issues": issues.View(),
+		"empty":       empty.View(),
+		"loading":     New(f).View(),
+	}
+}
+
+func TestPRLineShowsReviewIconAndRelTime(t *testing.T) {
+	now := time.Date(2026, 7, 12, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name string
+		pr   gh.PR
+		want []string
+	}{
+		{"draft", gh.PR{IsDraft: true, UpdatedAt: now.Add(-30 * time.Second)}, []string{"◌", "now"}},
+		{"approved", gh.PR{ReviewDecision: "APPROVED", UpdatedAt: now.Add(-5 * time.Minute)}, []string{"✓", "5m ago"}},
+		{"changes requested", gh.PR{ReviewDecision: "CHANGES_REQUESTED", UpdatedAt: now.Add(-3 * time.Hour)}, []string{"×", "3h ago"}},
+		{"review required", gh.PR{ReviewDecision: "REVIEW_REQUIRED", UpdatedAt: now.Add(-49 * time.Hour)}, []string{"•", "2d ago"}},
+		{"none", gh.PR{UpdatedAt: now}, []string{"•", "now"}},
+	}
+	for _, c := range cases {
+		got := prLine(c.pr, now)
+		for _, want := range c.want {
+			if !strings.Contains(got, want) {
+				t.Errorf("%s: prLine = %q, want to contain %q", c.name, got, want)
+			}
+		}
+	}
+}
+
+func TestIssueLineShowsNumberTitleAuthorAndRelTime(t *testing.T) {
+	now := time.Date(2026, 7, 12, 12, 0, 0, 0, time.UTC)
+	got := issueLine(gh.Issue{
+		Number: 3, Title: "an issue", Author: gh.Author{Login: "bob"},
+		UpdatedAt: now.Add(-5 * time.Minute),
+	}, now)
+	for _, want := range []string{"#3", "an issue", "@bob", "5m ago"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("issueLine = %q, want to contain %q", got, want)
+		}
+	}
+}

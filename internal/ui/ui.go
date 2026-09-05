@@ -2,6 +2,7 @@
 package ui
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -18,8 +19,8 @@ import (
 // prSource is what the screens need for pull requests.
 // repo is "owner/repo"; the empty string targets the workspace repository.
 type prSource interface {
-	ListPRs() ([]gh.PR, error)
-	GetPR(repo string, number int) (gh.PR, error)
+	ListPRs(ctx context.Context) ([]gh.PR, error)
+	GetPR(ctx context.Context, repo string, number int) (gh.PR, error)
 	OpenPRWeb(repo string, number int) error
 	AddPRComment(repo string, number int, body string) error
 	ClosePR(repo string, number int) error
@@ -32,8 +33,8 @@ type prSource interface {
 // than merged so that adding a PR-only call cannot silently imply an issue
 // equivalent that GitHub does not offer.
 type issueSource interface {
-	ListIssues() ([]gh.Issue, error)
-	GetIssue(repo string, number int) (gh.Issue, error)
+	ListIssues(ctx context.Context) ([]gh.Issue, error)
+	GetIssue(ctx context.Context, repo string, number int) (gh.Issue, error)
 	OpenIssueWeb(repo string, number int) error
 	AddIssueComment(repo string, number int, body string) error
 	CloseIssue(repo string, number int) error
@@ -45,14 +46,14 @@ type issueSource interface {
 // repoNamer names the workspace repository. It stands alone because it is
 // the one call that belongs to neither kind.
 type repoNamer interface {
-	RepoName() (string, error)
+	RepoName(ctx context.Context) (string, error)
 }
 
 // candidateSource lists what a picker offers. Labels and assignees belong
 // to the repository, not to a PR or an issue, so this too is kind-free.
 type candidateSource interface {
-	ListLabels(repo string) ([]gh.Label, error)
-	ListAssignees(repo string) ([]string, error)
+	ListLabels(ctx context.Context, repo string) ([]gh.Label, error)
+	ListAssignees(ctx context.Context, repo string) ([]string, error)
 }
 
 // DataSource is the union the root model is handed. A command that acts on
@@ -181,14 +182,15 @@ func (m Model) Init() tea.Cmd {
 
 func fetchList(src DataSource, t tabID) tea.Cmd {
 	return func() tea.Msg {
+		ctx := context.Background()
 		if t == tabPRs {
-			prs, err := src.ListPRs()
+			prs, err := src.ListPRs(ctx)
 			if err != nil {
 				return errorMsg{err}
 			}
 			return prListMsg(prs)
 		}
-		issues, err := src.ListIssues()
+		issues, err := src.ListIssues(ctx)
 		if err != nil {
 			return errorMsg{err}
 		}
@@ -198,14 +200,15 @@ func fetchList(src DataSource, t tabID) tea.Cmd {
 
 func fetchDetail(src DataSource, target Target) tea.Cmd {
 	return func() tea.Msg {
+		ctx := context.Background()
 		if target.Kind == KindPR {
-			pr, err := src.GetPR(target.Repo, target.Number)
+			pr, err := src.GetPR(ctx, target.Repo, target.Number)
 			if err != nil {
 				return errorMsg{err}
 			}
 			return prDetailMsg(pr)
 		}
-		issue, err := src.GetIssue(target.Repo, target.Number)
+		issue, err := src.GetIssue(ctx, target.Repo, target.Number)
 		if err != nil {
 			return errorMsg{err}
 		}
@@ -215,7 +218,7 @@ func fetchDetail(src DataSource, target Target) tea.Cmd {
 
 func fetchRepoName(src repoNamer) tea.Cmd {
 	return func() tea.Msg {
-		name, err := src.RepoName()
+		name, err := src.RepoName(context.Background())
 		if err != nil {
 			return repoNameMsg("") // ヘッダー表示専用の情報なので失敗は無視する
 		}
@@ -288,7 +291,7 @@ func setState(src DataSource, target Target, closing bool) tea.Cmd {
 
 func fetchLabelPicker(src candidateSource, target Target) tea.Cmd {
 	return func() tea.Msg {
-		labels, err := src.ListLabels(target.Repo)
+		labels, err := src.ListLabels(context.Background(), target.Repo)
 		if err != nil {
 			return pickErrorMsg{err}
 		}
@@ -298,7 +301,7 @@ func fetchLabelPicker(src candidateSource, target Target) tea.Cmd {
 
 func fetchAssigneePicker(src candidateSource, target Target) tea.Cmd {
 	return func() tea.Msg {
-		users, err := src.ListAssignees(target.Repo)
+		users, err := src.ListAssignees(context.Background(), target.Repo)
 		if err != nil {
 			return pickErrorMsg{err}
 		}

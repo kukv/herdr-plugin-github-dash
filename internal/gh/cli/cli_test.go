@@ -37,7 +37,7 @@ func newTestClient(out string, err error) (*Client, *fakeRun) {
 
 func TestListPRs(t *testing.T) {
 	c, f := newTestClient(prListJSON, nil)
-	prs, err := c.ListPRs()
+	prs, err := c.ListPRs(t.Context())
 	if err != nil {
 		t.Fatalf("ListPRs: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestListPRs(t *testing.T) {
 
 func TestListPRsEmpty(t *testing.T) {
 	c, _ := newTestClient(`[]`, nil)
-	prs, err := c.ListPRs()
+	prs, err := c.ListPRs(t.Context())
 	if err != nil || len(prs) != 0 {
 		t.Errorf("prs = %v, err = %v; want empty, nil", prs, err)
 	}
@@ -64,7 +64,7 @@ func TestListPRsEmpty(t *testing.T) {
 
 func TestGetPRParsesDetailFields(t *testing.T) {
 	c, f := newTestClient(prViewJSON, nil)
-	pr, err := c.GetPR("", 12)
+	pr, err := c.GetPR(t.Context(), "", 12)
 	if err != nil {
 		t.Fatalf("GetPR: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestGetPRParsesDetailFields(t *testing.T) {
 
 func TestGetPRWithRepoOverride(t *testing.T) {
 	c, f := newTestClient(prViewJSON, nil)
-	if _, err := c.GetPR("octo/hello", 12); err != nil {
+	if _, err := c.GetPR(t.Context(), "octo/hello", 12); err != nil {
 		t.Fatalf("GetPR: %v", err)
 	}
 	wantArgs := []string{"pr", "view", "12", "--json", prViewFields, "--repo", "octo/hello"}
@@ -92,7 +92,7 @@ func TestGetPRWithRepoOverride(t *testing.T) {
 
 func TestListIssues(t *testing.T) {
 	c, f := newTestClient(issueListJSON, nil)
-	issues, err := c.ListIssues()
+	issues, err := c.ListIssues(t.Context())
 	if err != nil {
 		t.Fatalf("ListIssues: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestListIssues(t *testing.T) {
 
 func TestGetIssueWithRepoOverride(t *testing.T) {
 	c, f := newTestClient(issueViewJSON, nil)
-	issue, err := c.GetIssue("octo/hello", 3)
+	issue, err := c.GetIssue(t.Context(), "octo/hello", 3)
 	if err != nil {
 		t.Fatalf("GetIssue: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestGetIssueWithRepoOverride(t *testing.T) {
 
 func TestRepoName(t *testing.T) {
 	c, f := newTestClient(`{"nameWithOwner":"kukv/demo"}`, nil)
-	name, err := c.RepoName()
+	name, err := c.RepoName(t.Context())
 	if err != nil || name != "kukv/demo" {
 		t.Errorf("name = %q, err = %v; want kukv/demo, nil", name, err)
 	}
@@ -158,7 +158,7 @@ func TestOpenIssueWebWithRepoOverride(t *testing.T) {
 func TestRunErrorPassesThrough(t *testing.T) {
 	wantErr := errors.New("gh pr: no git remotes found")
 	c, _ := newTestClient("", wantErr)
-	if _, err := c.ListPRs(); !errors.Is(err, wantErr) {
+	if _, err := c.ListPRs(t.Context()); !errors.Is(err, wantErr) {
 		t.Errorf("err = %v, want %v", err, wantErr)
 	}
 }
@@ -231,7 +231,7 @@ func TestStateChangeError(t *testing.T) {
 
 func TestListLabels(t *testing.T) {
 	c, f := newTestClient(`[{"name":"bug","color":"d73a4a"},{"name":"wip","color":"ededed"}]`, nil)
-	labels, err := c.ListLabels("")
+	labels, err := c.ListLabels(t.Context(), "")
 	if err != nil {
 		t.Fatalf("ListLabels: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestListLabels(t *testing.T) {
 
 func TestListAssignees(t *testing.T) {
 	c, f := newTestClient(`[{"login":"alice"},{"login":"bob"}]`, nil)
-	users, err := c.ListAssignees("")
+	users, err := c.ListAssignees(t.Context(), "")
 	if err != nil {
 		t.Fatalf("ListAssignees: %v", err)
 	}
@@ -261,7 +261,7 @@ func TestListAssignees(t *testing.T) {
 
 func TestListAssigneesWithRepoOverride(t *testing.T) {
 	c, f := newTestClient(`[]`, nil)
-	if _, err := c.ListAssignees("octo/hello"); err != nil {
+	if _, err := c.ListAssignees(t.Context(), "octo/hello"); err != nil {
 		t.Fatalf("ListAssignees: %v", err)
 	}
 	wantArgs := []string{"api", "repos/octo/hello/assignees?per_page=100"}
@@ -272,7 +272,7 @@ func TestListAssigneesWithRepoOverride(t *testing.T) {
 
 func TestGetPRParsesAssignees(t *testing.T) {
 	c, _ := newTestClient(`{"number":12,"title":"t","assignees":[{"login":"alice"},{"login":"bob"}]}`, nil)
-	pr, err := c.GetPR("", 12)
+	pr, err := c.GetPR(t.Context(), "", 12)
 	if err != nil {
 		t.Fatalf("GetPR: %v", err)
 	}
@@ -329,7 +329,7 @@ func TestClientUsesDefaultRepo(t *testing.T) {
 		got = args
 		return []byte("[]"), nil
 	}
-	if _, err := c.ListPRs(); err != nil {
+	if _, err := c.ListPRs(t.Context()); err != nil {
 		t.Fatalf("ListPRs: %v", err)
 	}
 	want := []string{"pr", "list", "--json", prListFields, "--repo", "kukv/octoscope"}
@@ -345,7 +345,7 @@ func TestPerCallRepoOverridesDefault(t *testing.T) {
 		got = args
 		return []byte("{}"), nil
 	}
-	if _, err := c.GetPR("herdr/herdr", 7); err != nil {
+	if _, err := c.GetPR(t.Context(), "herdr/herdr", 7); err != nil {
 		t.Fatalf("GetPR: %v", err)
 	}
 	if !slices.Contains(got, "herdr/herdr") || slices.Contains(got, "kukv/octoscope") {
@@ -360,7 +360,7 @@ func TestRepoNameUsesPositionalArgument(t *testing.T) {
 		got = args
 		return []byte(`{"nameWithOwner":"kukv/octoscope"}`), nil
 	}
-	if _, err := c.RepoName(); err != nil {
+	if _, err := c.RepoName(t.Context()); err != nil {
 		t.Fatalf("RepoName: %v", err)
 	}
 	want := []string{"repo", "view", "kukv/octoscope", "--json", "nameWithOwner"}
@@ -376,7 +376,7 @@ func TestListAssigneesBuildsAPIPathFromDefaultRepo(t *testing.T) {
 		got = args
 		return []byte("[]"), nil
 	}
-	if _, err := c.ListAssignees(""); err != nil {
+	if _, err := c.ListAssignees(t.Context(), ""); err != nil {
 		t.Fatalf("ListAssignees: %v", err)
 	}
 	want := []string{"api", "repos/kukv/octoscope/assignees?per_page=100"}

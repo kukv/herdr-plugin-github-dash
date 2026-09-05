@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -38,16 +39,21 @@ type fakeSource struct {
 	editErr   error
 }
 
-func (f *fakeSource) ListPRs() ([]gh.PR, error)       { return f.prs, f.err }
-func (f *fakeSource) ListIssues() ([]gh.Issue, error) { return f.issues, f.err }
-func (f *fakeSource) GetPR(repo string, n int) (gh.PR, error) {
+func (f *fakeSource) ListPRs(ctx context.Context) ([]gh.PR, error) { return f.prs, f.err }
+
+func (f *fakeSource) ListIssues(ctx context.Context) ([]gh.Issue, error) {
+	return f.issues, f.err
+}
+
+func (f *fakeSource) GetPR(ctx context.Context, repo string, n int) (gh.PR, error) {
 	return f.pr, f.err
 }
 
-func (f *fakeSource) GetIssue(repo string, n int) (gh.Issue, error) {
+func (f *fakeSource) GetIssue(ctx context.Context, repo string, n int) (gh.Issue, error) {
 	return f.issue, f.err
 }
-func (f *fakeSource) RepoName() (string, error) { return "kukv/demo", f.err }
+
+func (f *fakeSource) RepoName(ctx context.Context) (string, error) { return "kukv/demo", f.err }
 func (f *fakeSource) OpenPRWeb(repo string, n int) error {
 	f.webCalls = append(f.webCalls, "pr:"+repo+":"+itoa(n))
 	return nil
@@ -88,8 +94,14 @@ func (f *fakeSource) ReopenIssue(repo string, n int) error {
 	return f.stateErr
 }
 
-func (f *fakeSource) ListLabels(repo string) ([]gh.Label, error)  { return f.labels, f.labelsErr }
-func (f *fakeSource) ListAssignees(repo string) ([]string, error) { return f.users, f.usersErr }
+func (f *fakeSource) ListLabels(ctx context.Context, repo string) ([]gh.Label, error) {
+	return f.labels, f.labelsErr
+}
+
+func (f *fakeSource) ListAssignees(ctx context.Context, repo string) ([]string, error) {
+	return f.users, f.usersErr
+}
+
 func (f *fakeSource) EditPRLabels(repo string, n int, add, remove []string) error {
 	f.editCalls = append(f.editCalls, "pr:labels:"+repo+":"+itoa(n)+editSuffix(add, remove))
 	return f.editErr
