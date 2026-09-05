@@ -15,44 +15,54 @@ import (
 	"github.com/kukv/octoscope/internal/i18n"
 )
 
-// listSource is what the list screen needs.
+// prSource is what the screens need for pull requests.
 // repo is "owner/repo"; the empty string targets the workspace repository.
-type listSource interface {
+type prSource interface {
 	ListPRs() ([]gh.PR, error)
-	ListIssues() ([]gh.Issue, error)
-	RepoName() (string, error)
-}
-
-// detailSource is what the detail screen needs.
-type detailSource interface {
 	GetPR(repo string, number int) (gh.PR, error)
-	GetIssue(repo string, number int) (gh.Issue, error)
 	OpenPRWeb(repo string, number int) error
-	OpenIssueWeb(repo string, number int) error
 	AddPRComment(repo string, number int, body string) error
-	AddIssueComment(repo string, number int, body string) error
 	ClosePR(repo string, number int) error
 	ReopenPR(repo string, number int) error
-	CloseIssue(repo string, number int) error
-	ReopenIssue(repo string, number int) error
+	EditPRLabels(repo string, number int, add, remove []string) error
+	EditPRAssignees(repo string, number int, add, remove []string) error
 }
 
-// pickerSource is what the label / assignee picker needs.
-type pickerSource interface {
-	ListLabels(repo string) ([]gh.Label, error)
-	ListAssignees(repo string) ([]string, error)
-	EditPRLabels(repo string, number int, add, remove []string) error
+// issueSource mirrors prSource for issues. The two are kept apart rather
+// than merged so that adding a PR-only call cannot silently imply an issue
+// equivalent that GitHub does not offer.
+type issueSource interface {
+	ListIssues() ([]gh.Issue, error)
+	GetIssue(repo string, number int) (gh.Issue, error)
+	OpenIssueWeb(repo string, number int) error
+	AddIssueComment(repo string, number int, body string) error
+	CloseIssue(repo string, number int) error
+	ReopenIssue(repo string, number int) error
 	EditIssueLabels(repo string, number int, add, remove []string) error
-	EditPRAssignees(repo string, number int, add, remove []string) error
 	EditIssueAssignees(repo string, number int, add, remove []string) error
 }
 
-// DataSource is the union the root model is handed; each screen takes only
-// the slice of it that it uses.
+// repoNamer names the workspace repository. It stands alone because it is
+// the one call that belongs to neither kind.
+type repoNamer interface {
+	RepoName() (string, error)
+}
+
+// candidateSource lists what a picker offers. Labels and assignees belong
+// to the repository, not to a PR or an issue, so this too is kind-free.
+type candidateSource interface {
+	ListLabels(repo string) ([]gh.Label, error)
+	ListAssignees(repo string) ([]string, error)
+}
+
+// DataSource is the union the root model is handed. A command that acts on
+// one kind takes the matching half; a command that picks the kind at run
+// time takes the whole.
 type DataSource interface {
-	listSource
-	detailSource
-	pickerSource
+	prSource
+	issueSource
+	repoNamer
+	candidateSource
 }
 
 type Kind int
@@ -169,7 +179,7 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func fetchList(src listSource, t tabID) tea.Cmd {
+func fetchList(src DataSource, t tabID) tea.Cmd {
 	return func() tea.Msg {
 		if t == tabPRs {
 			prs, err := src.ListPRs()
@@ -186,7 +196,7 @@ func fetchList(src listSource, t tabID) tea.Cmd {
 	}
 }
 
-func fetchDetail(src detailSource, target Target) tea.Cmd {
+func fetchDetail(src DataSource, target Target) tea.Cmd {
 	return func() tea.Msg {
 		if target.Kind == KindPR {
 			pr, err := src.GetPR(target.Repo, target.Number)
@@ -203,7 +213,7 @@ func fetchDetail(src detailSource, target Target) tea.Cmd {
 	}
 }
 
-func fetchRepoName(src listSource) tea.Cmd {
+func fetchRepoName(src repoNamer) tea.Cmd {
 	return func() tea.Msg {
 		name, err := src.RepoName()
 		if err != nil {
@@ -213,7 +223,7 @@ func fetchRepoName(src listSource) tea.Cmd {
 	}
 }
 
-func openWeb(src detailSource, target Target) tea.Cmd {
+func openWeb(src DataSource, target Target) tea.Cmd {
 	return func() tea.Msg {
 		var err error
 		if target.Kind == KindPR {
@@ -228,7 +238,7 @@ func openWeb(src detailSource, target Target) tea.Cmd {
 	}
 }
 
-func postComment(src detailSource, target Target, body string) tea.Cmd {
+func postComment(src DataSource, target Target, body string) tea.Cmd {
 	return func() tea.Msg {
 		var err error
 		if target.Kind == KindPR {
@@ -256,7 +266,7 @@ func (m Model) stateAction() (closing bool, ok bool) {
 	}
 }
 
-func setState(src detailSource, target Target, closing bool) tea.Cmd {
+func setState(src DataSource, target Target, closing bool) tea.Cmd {
 	return func() tea.Msg {
 		var err error
 		switch {
@@ -276,7 +286,7 @@ func setState(src detailSource, target Target, closing bool) tea.Cmd {
 	}
 }
 
-func fetchLabelPicker(src pickerSource, target Target) tea.Cmd {
+func fetchLabelPicker(src candidateSource, target Target) tea.Cmd {
 	return func() tea.Msg {
 		labels, err := src.ListLabels(target.Repo)
 		if err != nil {
@@ -286,7 +296,7 @@ func fetchLabelPicker(src pickerSource, target Target) tea.Cmd {
 	}
 }
 
-func fetchAssigneePicker(src pickerSource, target Target) tea.Cmd {
+func fetchAssigneePicker(src candidateSource, target Target) tea.Cmd {
 	return func() tea.Msg {
 		users, err := src.ListAssignees(target.Repo)
 		if err != nil {
@@ -296,7 +306,7 @@ func fetchAssigneePicker(src pickerSource, target Target) tea.Cmd {
 	}
 }
 
-func applyPicker(src pickerSource, target Target, kind pickerKind, add, remove []string) tea.Cmd {
+func applyPicker(src DataSource, target Target, kind pickerKind, add, remove []string) tea.Cmd {
 	return func() tea.Msg {
 		var err error
 		switch {
