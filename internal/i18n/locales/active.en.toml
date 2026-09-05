@@ -1,0 +1,128 @@
+["app.name"]
+other = "octoscope"
+
+["app.error_title"]
+other = "octoscope — error"
+
+["common.loading"]
+other = "loading..."
+
+["common.error_prefix"]
+other = "error: "
+
+["list.tab_prs"]
+other = "Pull Requests"
+
+["list.tab_issues"]
+other = "Issues"
+
+["list.no_open_prs"]
+other = "No open pull requests"
+
+["list.no_open_issues"]
+other = "No open issues"
+
+["detail.pr_title"]
+other = "PR #{{.Number}} {{.Title}}"
+
+["detail.issue_title"]
+other = "Issue #{{.Number}} {{.Title}}"
+
+["compose.title"]
+other = "Comment on {{.Title}}"
+
+["compose.placeholder"]
+other = "Leave a comment..."
+
+["compose.posting"]
+other = "posting..."
+
+["picker.labels"]
+other = "Labels"
+
+["picker.assignees"]
+other = "Assignees"
+
+["picker.applying"]
+other = "applying..."
+
+["picker.no_candidates"]
+other = "(no candidates)"
+
+["confirm.close_pr"]
+other = "Close this PR? "
+
+["confirm.reopen_pr"]
+other = "Reopen this PR? "
+
+["confirm.close_issue"]
+other = "Close this issue? "
+
+["confirm.reopen_issue"]
+other = "Reopen this issue? "
+
+["confirm.yes_no"]
+other = "(y/n)"
+
+["confirm.working"]
+other = "working..."
+
+["footer.list"]
+other = "j/k:move  enter:detail  tab:PR/Issue  r:refresh  o:browser  q:quit"
+
+["footer.detail_prefix"]
+other = "j/k:scroll  r:refresh  o:browser  c:comment  "
+
+["footer.detail_suffix"]
+other = "l:labels  a:assign  esc:back"
+
+["footer.close"]
+other = "x:close  "
+
+["footer.reopen"]
+other = "x:reopen  "
+
+["footer.picker"]
+other = "space:toggle  enter:apply  esc:cancel"
+
+["footer.compose"]
+other = "ctrl+s:send  esc:cancel"
+
+["footer.error"]
+other = "q:quit"
+
+["md.author"]
+other = "author"
+
+["md.state"]
+other = "state"
+
+["md.review"]
+other = "review"
+
+["md.labels"]
+other = "labels"
+
+["md.updated"]
+other = "updated"
+
+["md.draft_suffix"]
+other = " (draft)"
+
+["md.no_description"]
+other = "_no description_"
+
+["time.now"]
+other = "now"
+
+["time.minutes_ago"]
+one = "{{.Count}}m ago"
+other = "{{.Count}}m ago"
+
+["time.hours_ago"]
+one = "{{.Count}}h ago"
+other = "{{.Count}}h ago"
+
+["time.days_ago"]
+one = "{{.Count}}d ago"
+other = "{{.Count}}d ago"

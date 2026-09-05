@@ -8,6 +8,10 @@ require (
 	charm.land/glamour/v2 v2.0.1
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/charmbracelet/x/ansi v0.11.8
+	github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade
+	github.com/nicksnyder/go-i18n/v2 v2.6.1
+	github.com/pelletier/go-toml/v2 v2.4.3
+	golang.org/x/text v0.41.0
 )
 
 require (
@@ -35,5 +39,4 @@ require (
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.39.0 // indirect
 )

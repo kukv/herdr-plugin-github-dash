@@ -1,8 +1,7 @@
-// Package ui implements the GitHub Dash terminal UI.
+// Package ui implements the octoscope terminal UI.
 package ui
 
 import (
-	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/spinner"
@@ -12,6 +11,7 @@ import (
 	"charm.land/glamour/v2"
 
 	"github.com/kukv/octoscope/internal/ghcli"
+	"github.com/kukv/octoscope/internal/i18n"
 )
 
 // DataSource is what the UI needs from the GitHub layer.
@@ -131,7 +131,7 @@ func New(src DataSource) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	ta := textarea.New()
-	ta.Placeholder = "Leave a comment..."
+	ta.Placeholder = i18n.T("compose.placeholder")
 	ta.ShowLineNumbers = false
 	m := Model{
 		src:      src,
@@ -349,7 +349,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.actionErr = ""
 		m.detailLabels = labelNames(msg.Labels)
 		m.detailAssignees = authorLogins(msg.Assignees)
-		m.detailTitle = fmt.Sprintf("PR #%d %s", msg.Number, msg.Title)
+		m.detailTitle = i18n.Tf("detail.pr_title", map[string]any{"Number": msg.Number, "Title": msg.Title})
 		m.setDetailContent(prMarkdown(ghcli.PR(msg)))
 		return m, nil
 	case issueDetailMsg:
@@ -358,7 +358,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.actionErr = ""
 		m.detailLabels = labelNames(msg.Labels)
 		m.detailAssignees = authorLogins(msg.Assignees)
-		m.detailTitle = fmt.Sprintf("Issue #%d %s", msg.Number, msg.Title)
+		m.detailTitle = i18n.Tf("detail.issue_title", map[string]any{"Number": msg.Number, "Title": msg.Title})
 		m.setDetailContent(issueMarkdown(ghcli.Issue(msg)))
 		return m, nil
 	case commentPostedMsg:
@@ -392,9 +392,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				names[i] = l.Name
 				colors[l.Name] = l.Color
 			}
-			m.picker = newPicker(pickLabels, "Labels", names, colors, m.detailLabels)
+			m.picker = newPicker(pickLabels, i18n.T("picker.labels"), names, colors, m.detailLabels)
 		} else {
-			m.picker = newPicker(pickAssignees, "Assignees", msg.users, nil, m.detailAssignees)
+			m.picker = newPicker(pickAssignees, i18n.T("picker.assignees"), msg.users, nil, m.detailAssignees)
 		}
 		m.picking = true
 		return m, nil
