@@ -8,38 +8,25 @@ import (
 	"github.com/kukv/octoscope/internal/gh"
 )
 
-func TestRelTime(t *testing.T) {
+func TestPRLineShowsReviewIconAndRelTime(t *testing.T) {
 	now := time.Date(2026, 7, 12, 12, 0, 0, 0, time.UTC)
 	cases := []struct {
-		t    time.Time
-		want string
-	}{
-		{now.Add(-30 * time.Second), "now"},
-		{now.Add(-5 * time.Minute), "5m ago"},
-		{now.Add(-3 * time.Hour), "3h ago"},
-		{now.Add(-49 * time.Hour), "2d ago"},
-	}
-	for _, c := range cases {
-		if got := relTime(now, c.t); got != c.want {
-			t.Errorf("relTime(%v) = %q, want %q", c.t, got, c.want)
-		}
-	}
-}
-
-func TestReviewIcon(t *testing.T) {
-	cases := []struct {
+		name string
 		pr   gh.PR
-		want string
+		want []string
 	}{
-		{gh.PR{IsDraft: true}, "◌"},
-		{gh.PR{ReviewDecision: "APPROVED"}, "✓"},
-		{gh.PR{ReviewDecision: "CHANGES_REQUESTED"}, "×"},
-		{gh.PR{ReviewDecision: "REVIEW_REQUIRED"}, "•"},
-		{gh.PR{}, "•"},
+		{"draft", gh.PR{IsDraft: true, UpdatedAt: now.Add(-30 * time.Second)}, []string{"◌", "now"}},
+		{"approved", gh.PR{ReviewDecision: "APPROVED", UpdatedAt: now.Add(-5 * time.Minute)}, []string{"✓", "5m ago"}},
+		{"changes requested", gh.PR{ReviewDecision: "CHANGES_REQUESTED", UpdatedAt: now.Add(-3 * time.Hour)}, []string{"×", "3h ago"}},
+		{"review required", gh.PR{ReviewDecision: "REVIEW_REQUIRED", UpdatedAt: now.Add(-49 * time.Hour)}, []string{"•", "2d ago"}},
+		{"none", gh.PR{UpdatedAt: now}, []string{"•", "now"}},
 	}
 	for _, c := range cases {
-		if got := reviewIcon(c.pr); got != c.want {
-			t.Errorf("reviewIcon(%+v) = %q, want %q", c.pr, got, c.want)
+		got := prLine(c.pr, now)
+		for _, want := range c.want {
+			if !strings.Contains(got, want) {
+				t.Errorf("%s: prLine = %q, want to contain %q", c.name, got, want)
+			}
 		}
 	}
 }

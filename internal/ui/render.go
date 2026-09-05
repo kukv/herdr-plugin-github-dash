@@ -9,6 +9,7 @@ import (
 
 	"github.com/kukv/octoscope/internal/gh"
 	"github.com/kukv/octoscope/internal/i18n"
+	"github.com/kukv/octoscope/internal/tui/icon"
 )
 
 var (
@@ -155,40 +156,14 @@ func cursorPrefix(selected bool) string {
 
 func prLine(pr gh.PR, now time.Time) string {
 	return fmt.Sprintf("#%-5d %s  @%s  %s %s",
-		pr.Number, pr.Title, pr.Author.Login, reviewIcon(pr), relTime(now, pr.UpdatedAt))
+		pr.Number, pr.Title, pr.Author.Login,
+		icon.Review(gh.ParseReviewDecision(pr.ReviewDecision), pr.IsDraft),
+		i18n.RelTime(now, pr.UpdatedAt))
 }
 
 func issueLine(issue gh.Issue, now time.Time) string {
 	return fmt.Sprintf("#%-5d %s  @%s  %s",
-		issue.Number, issue.Title, issue.Author.Login, relTime(now, issue.UpdatedAt))
-}
-
-func reviewIcon(pr gh.PR) string {
-	if pr.IsDraft {
-		return "◌"
-	}
-	switch pr.ReviewDecision {
-	case "APPROVED":
-		return "✓"
-	case "CHANGES_REQUESTED":
-		return "×"
-	default:
-		return "•"
-	}
-}
-
-func relTime(now, t time.Time) string {
-	d := now.Sub(t)
-	switch {
-	case d < time.Minute:
-		return i18n.T("time.now")
-	case d < time.Hour:
-		return i18n.Tn("time.minutes_ago", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return i18n.Tn("time.hours_ago", int(d.Hours()))
-	default:
-		return i18n.Tn("time.days_ago", int(d.Hours()/24))
-	}
+		issue.Number, issue.Title, issue.Author.Login, i18n.RelTime(now, issue.UpdatedAt))
 }
 
 func prMarkdown(pr gh.PR) string {
