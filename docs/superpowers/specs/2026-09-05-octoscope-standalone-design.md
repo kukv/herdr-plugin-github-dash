@@ -48,22 +48,32 @@ Herdr との統合は完全に廃止する（Herdr からは通常のコマン�
 
 ### 3.1 パッケージ構成
 
+凡例: `[Phase 1]` は実装済み、無印は未着手（設計上の置き場所として予約してある）。
+
 ```
-cmd/octoscope/        エントリポイント、フラグ解析
-internal/gh/          GitHub アクセスの抽象（interface とドメイン型）
-  ├ cli/              gh CLI バックエンド（既存 internal/ghcli を移設）
-  └ api/              go-github + githubv4 バックエンド（Phase 4）
-internal/config/      設定ファイルの読み込み
-internal/i18n/        メッセージカタログ（en / ja、go:embed）
+cmd/octoscope/        エントリポイント、フラグ解析                          [Phase 1]
+internal/gh/          GitHub アクセス層が返すドメイン型                     [Phase 1]
+  ├ cli/              gh CLI バックエンド（既存 internal/ghcli を移設）     [Phase 1]
+  └ api/              go-github + githubv4 バックエンド                    (Phase 4)
+internal/config/      設定ファイルの読み込み                                (未着手)
+internal/i18n/        メッセージカタログ（en / ja、go:embed）               [Phase 1]
 internal/tui/         Bubble Tea モデル群
-  ├ app/              ルートモデル、タブ切替、共通キーマップ
-  ├ work/             「自分に関係する仕事」ビュー
-  ├ repos/            リポジトリブラウザ
-  ├ search/           クエリビルダーと結果
-  ├ dialog/           ポップアップ（リポジトリ追加、保存クエリ呼び出し）
-  ├ detail/           PR/Issue 詳細
-  └ diff/             diff ビューア
+  ├ app/              ルートモデル、タブ切替、共通キーマップ                [Phase 1]
+  ├ work/             「自分に関係する仕事」ビュー                         [Phase 1]
+  ├ repo/             Repos タブの右ペイン（1 リポジトリの PR/Issue 一覧） [Phase 1]
+  ├ repos/            Repos タブ全体（サイドバー + リポジトリ追加ダイアログ + repo/）(Phase 4)
+  ├ search/           クエリビルダーと結果                                  (Phase 4)
+  ├ dialog/           ポップアップ（リポジトリ追加、保存クエリ呼び出し）    (Phase 4)
+  ├ detail/           PR/Issue 詳細                                        [Phase 1]
+  ├ icon/             状態アイコン                                        [Phase 1]
+  ├ layout/           表示幅に応じた行の折り返し・切り詰め（`ClipLines`）  [Phase 1]
+  └ diff/             diff ビューア                                        (Phase 3)
 ```
+
+`internal/tui/repo`（単数）と `internal/tui/repos`（複数）は綴りが似ているが別のパッケージ。
+`repo` は Phase 1 で作った、1 つのリポジトリの PR/Issue 一覧だけを描く右ペイン。
+`repos` はサイドバーとリポジトリ追加ダイアログを含む Repos タブ全体で、Phase 4 で新設する。
+`repo` を `repos` に改名するのではなく、`repos` が `repo` を右ペインとして内包する形になる。
 
 刷新前の UI は、一覧・詳細・コメント入力・ピッカーの状態が 1 つのモデルに
 同居していた。ここにタブ・diff・checks を足すと破綻するため、
@@ -73,7 +83,13 @@ internal/tui/         Bubble Tea モデル群
 
 ### 3.2 バックエンド抽象
 
-`internal/gh` に `Client` interface を定義し、2 つの実装を差し替え可能にする。
+`internal/gh` は interface を export しない（`.claude/rules/architecture.md`
+「interface は利用側で定義する」）。バックエンドの差し替えは、`internal/gh` 側に
+共通の `Client` interface を置くのではなく、両バックエンドが**同じドメイン型を返す
+具体型**として実装され、それぞれの利用側（`internal/tui` の各サブモデル）が宣言する
+小さな interface を両方とも満たす、という形で成立する。利用側は「自分が呼ぶメソッド」
+だけを interface として宣言するため、`cli` と `api` のどちらが裏で動いているかを
+知る必要がない。
 
 | 実装 | 手段 | 認証 |
 |---|---|---|
@@ -84,8 +100,8 @@ internal/tui/         Bubble Tea モデル群
 環境変数のトークンで `api` を構築する。どちらも利用できない場合は、
 `gh auth login` の実行かトークンの設定を促すエラー画面を表示する。
 
-既存の `ghcli.Client` は `runFunc` を差し替え可能なフィールドとして持っており、
-この抽象化はその延長線上にある。
+`internal/gh/cli` の `Client` は `run`（`runFunc` 型）を差し替え可能なフィールドとして
+持っており、この抽象化はその延長線上にある。
 
 ### 3.3 データ取得
 
@@ -110,6 +126,10 @@ Herdr のコンテキストに代わり、次の優先順で決定する。
 
 3 つのタブを並列に持ち、`1` / `2` / `3` で切り替える。起動直後は Work タブ。
 タブごとに役割が違うため、共通のレイアウトを被せず、それぞれに合った形を採る。
+
+タブは一度に全部揃うわけではない。Search タブは Phase 4 で追加されるまで存在しない。
+また `--repo` フラグも git remote も無く対象リポジトリが決まらないときは、Repos タブ
+自体を出さず（§3.4 参照）、Work タブだけで動く。
 
 ### 4.1 Work タブ — カンバン
 
@@ -256,6 +276,8 @@ Phase 0 時点のフラグは `--repo` / `--lang` / `--version` の 3 つで、
   **項目名は翻訳するが、生成されるクエリ文字列は翻訳しない**
 - コマンドラインの `--help` 出力。`--lang` 自体がフラグである以上、
   フラグを解析し終えるまで言語が決まらないため、英語固定とする
+- タブ名（`Work` / `Repos` / `Search`）。キー `1` / `2` / `3` と対で
+  覚える画面上の識別子であるため
 
 ### 6.2 実装方針
 
@@ -328,7 +350,7 @@ Phase 0 時点のフラグは `--repo` / `--lang` / `--version` の 3 つで、
   各ビューのレンダリング結果を en / ja で走査し、未解決 ID（`!` 前置き）が
   混ざっていないことを確認する形に置き換える
 - 日時書式のカタログ化（§6.1 の「日時 — ロケールに応じた書式」）
-- `internal/gh` の interface 化、`ghcli` の移設
+- `internal/gh` をドメイン型のみのパッケージへ整理し、`ghcli` を `internal/gh/cli` として移設
 - GraphQL search によるリポジトリ横断取得
 - Work タブのカンバン（4 列 + ドロワー）の実装、タブ切替を持つルートモデル
 
@@ -365,7 +387,9 @@ Phase 0〜3 は `gh` を前提に進め、interface の境界だけを先に確�
 
 既存の `runFunc` 差し替えによるテストパターンを踏襲する。
 
-- `internal/gh` はテスト用の fake 実装を持ち、上位層はそれに対してテストする
+- fake は `internal/gh` に一元化せず、`internal/tui` の各サブモデルが自分の宣言した
+  interface に対して自分の `_test.go` に書く。`internal/gh/cli` 自身は `run` フィールドの
+  差し替えでテストする
 - TUI は `tea.Model` の `Update` / `View` を golden test で検証する
   （既存の `internal/ui/ui_test.go` と同じ形）。golden は `en` / `ja` の両方で持つ
 - ネットワークを実際に叩くテストは書かない

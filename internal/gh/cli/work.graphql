@@ -1,0 +1,74 @@
+# The Work board in one request: four aliased searches over one shared
+# selection. The aliases are the keys ListWork reads back, so they have to
+# match the ones listed in workSearches.
+#
+# reviewDecision and isDraft are GraphQL-only: REST does not expose them
+# (spec 3.3).
+query {
+  reviewRequested: search(type: ISSUE, first: 50, query: "is:open is:pr review-requested:@me") {
+    nodes { ...WorkItem }
+  }
+  yourPRs: search(type: ISSUE, first: 50, query: "is:open is:pr author:@me") {
+    nodes { ...WorkItem }
+  }
+  assigned: search(type: ISSUE, first: 50, query: "is:open assignee:@me") {
+    nodes { ...WorkItem }
+  }
+  mentioned: search(type: ISSUE, first: 50, query: "is:open mentions:@me") {
+    nodes { ...WorkItem }
+  }
+}
+
+fragment WorkItem on SearchResultItem {
+  __typename
+  ... on PullRequest {
+    number
+    title
+    url
+    isDraft
+    updatedAt
+    reviewDecision
+    author {
+      login
+    }
+    repository {
+      nameWithOwner
+    }
+    commits(last: 1) {
+      nodes {
+        commit {
+          statusCheckRollup {
+            contexts(first: 100) {
+              nodes { ...CheckContext }
+            }
+          }
+        }
+      }
+    }
+  }
+  ... on Issue {
+    number
+    title
+    url
+    updatedAt
+    author {
+      login
+    }
+    repository {
+      nameWithOwner
+    }
+  }
+}
+
+# CheckRun reports status and conclusion; the older StatusContext reports a
+# single state, so both shapes have to be asked for.
+fragment CheckContext on StatusCheckRollupContext {
+  __typename
+  ... on CheckRun {
+    status
+    conclusion
+  }
+  ... on StatusContext {
+    state
+  }
+}

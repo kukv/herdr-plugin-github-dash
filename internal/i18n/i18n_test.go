@@ -119,3 +119,29 @@ func TestDateTimeUsesThePerLanguageLayout(t *testing.T) {
 		}
 	}
 }
+
+func TestRelTimePicksTheRightUnit(t *testing.T) {
+	t.Cleanup(func() { i18n.SetLanguage(language.English) })
+	i18n.SetLanguage(language.English)
+
+	now := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name string
+		ago  time.Duration
+		want string
+	}{
+		{"under a minute", 59 * time.Second, "now"},
+		{"exactly a minute", time.Minute, "1m ago"},
+		{"under an hour", 59 * time.Minute, "59m ago"},
+		{"exactly an hour", time.Hour, "1h ago"},
+		{"under a day", 25 * time.Hour, "1d ago"},
+		{"several days", 72 * time.Hour, "3d ago"},
+	}
+
+	for _, tt := range tests {
+		if got := i18n.RelTime(now, now.Add(-tt.ago)); got != tt.want {
+			t.Errorf("%s: got %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}

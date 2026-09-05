@@ -107,6 +107,21 @@ func DateTime(t time.Time) string {
 	return t.Format(T("time.datetime_layout"))
 }
 
+// RelTime renders how long ago t was, relative to now.
+func RelTime(now, t time.Time) string {
+	d := now.Sub(t)
+	switch {
+	case d < time.Minute:
+		return T("time.now")
+	case d < time.Hour:
+		return Tn("time.minutes_ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return Tn("time.hours_ago", int(d.Hours()))
+	default:
+		return Tn("time.days_ago", int(d.Hours()/24))
+	}
+}
+
 func render(cfg *goi18n.LocalizeConfig) string {
 	mu.RLock()
 	l := localizer
