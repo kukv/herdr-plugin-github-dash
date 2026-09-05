@@ -24,7 +24,7 @@ func (m Model) View() tea.View {
 	case m.showingDetail:
 		content = m.detail.View()
 	default:
-		content = clipLines(m.tabRow(), m.width) + "\n\n" + m.activeTab()
+		content = m.tabRow() + "\n\n" + m.activeTab()
 	}
 	v := tea.NewView(content)
 	v.AltScreen = true
@@ -57,29 +57,17 @@ func (m Model) tabRow() string {
 }
 
 // errorView shows the failure that stopped the run. The heading and the key
-// hint are ours and are cut to the terminal width; the message itself came
-// from gh or GitHub and is all the user has to go on, so it is wrapped rather
-// than cut short (.claude/rules/errors.md).
+// hint are ours and are short in both languages; the message itself came from
+// gh or GitHub and can be any length, so it is wrapped rather than cut short
+// (.claude/rules/errors.md).
 func (m Model) errorView() string {
-	return clipLines(titleStyle.Render(i18n.T("app.error_title")), m.width) + "\n\n" +
+	return titleStyle.Render(i18n.T("app.error_title")) + "\n\n" +
 		wrap(m.errText, m.width) + "\n\n" +
-		clipLines(dimStyle.Render(i18n.T("footer.error")), m.width)
+		dimStyle.Render(i18n.T("footer.error"))
 }
 
-// clipLines cuts every line of s to w display columns. Japanese takes two
-// columns per character, so the count is never a byte or a rune count. Before
-// the first tea.WindowSizeMsg there is no width to clip to.
-func clipLines(s string, w int) string {
-	if w <= 0 {
-		return s
-	}
-	lines := strings.Split(s, "\n")
-	for i, line := range lines {
-		lines[i] = ansi.Truncate(line, w, "…")
-	}
-	return strings.Join(lines, "\n")
-}
-
+// wrap folds s to w display columns, breaking a word that has to be broken.
+// A w of zero or less means there is no width yet.
 func wrap(s string, w int) string {
 	if w <= 0 {
 		return s

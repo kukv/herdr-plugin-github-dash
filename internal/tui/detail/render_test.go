@@ -120,6 +120,29 @@ func renderEveryScreenSized(t *testing.T, width int) map[string]string {
 	}
 }
 
+// TestTheFooterIsWholeAtEightyColumns is the other half of the width guard.
+// The width test alone is satisfied by truncation: a footer that grew to 81
+// columns would be cut back to 80 and every assertion would stay green while
+// esc:back vanished off the end. The suffix is the tail of the footer and so
+// the first thing a cut takes, which is what makes it the thing to look for.
+func TestTheFooterIsWholeAtEightyColumns(t *testing.T) {
+	t.Cleanup(func() { i18n.SetLanguage(language.English) })
+
+	for _, lang := range []language.Tag{language.English, language.Japanese} {
+		i18n.SetLanguage(lang)
+		screens := renderEveryScreenSized(t, 80)
+		// The open item draws the close footer and the closed one the reopen
+		// footer; reopen is the wider of the two.
+		for _, name := range []string{"detail", "detail_closed"} {
+			suffix := i18n.T("footer.detail_suffix")
+			if !strings.Contains(screens[name], suffix) {
+				t.Errorf("%s lang %s: the footer was cut short of %q:\n%s",
+					name, lang, suffix, screens[name])
+			}
+		}
+	}
+}
+
 // TestNoUnresolvedIDsInRenderedViews guards spec §6.5. It renders each of the
 // view's screens in both languages and fails when a message ID the code asked
 // for is missing from that language's catalog. Walking i18n.IDs() cannot catch
@@ -130,7 +153,7 @@ func TestNoUnresolvedIDsInRenderedViews(t *testing.T) {
 
 	for _, lang := range []language.Tag{language.English, language.Japanese} {
 		i18n.SetLanguage(lang)
-		for name, view := range renderEveryScreenSized(t, 80) {
+		for name, view := range renderEveryScreenSized(t, 0) {
 			t.Run(lang.String()+"/"+name, func(t *testing.T) {
 				i18n.AssertNoUnresolvedIDs(t, view)
 			})

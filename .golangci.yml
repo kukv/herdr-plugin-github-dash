@@ -64,6 +64,32 @@ linters:
               desc: sibling views communicate through the app model, not directly
             - pkg: github.com/kukv/octoscope/internal/tui/app
               desc: a child view must not import its parent
+        # icon and layout sit below the views: they draw glyphs and measure
+        # columns, and know nothing of the models that call them.
+        tui-icon:
+          files:
+            - "**/internal/tui/icon/**"
+          deny:
+            - pkg: github.com/kukv/octoscope/internal/tui/work
+              desc: a leaf must not depend on the views that use it
+            - pkg: github.com/kukv/octoscope/internal/tui/repo
+              desc: a leaf must not depend on the views that use it
+            - pkg: github.com/kukv/octoscope/internal/tui/detail
+              desc: a leaf must not depend on the views that use it
+            - pkg: github.com/kukv/octoscope/internal/tui/app
+              desc: a leaf must not depend on the views that use it
+        tui-layout:
+          files:
+            - "**/internal/tui/layout/**"
+          deny:
+            - pkg: github.com/kukv/octoscope/internal/tui/work
+              desc: a leaf must not depend on the views that use it
+            - pkg: github.com/kukv/octoscope/internal/tui/repo
+              desc: a leaf must not depend on the views that use it
+            - pkg: github.com/kukv/octoscope/internal/tui/detail
+              desc: a leaf must not depend on the views that use it
+            - pkg: github.com/kukv/octoscope/internal/tui/app
+              desc: a leaf must not depend on the views that use it
   exclusions:
     rules:
       - linters:

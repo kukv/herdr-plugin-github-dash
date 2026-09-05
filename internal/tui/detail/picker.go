@@ -6,6 +6,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/kukv/octoscope/internal/i18n"
+	"github.com/kukv/octoscope/internal/tui/layout"
 )
 
 type pickerKind int
@@ -97,9 +98,9 @@ func (p picker) diff() (add, remove []string) {
 
 func (p picker) listView(height, width int) string {
 	var b strings.Builder
-	b.WriteString(clipLines(titleStyle.Render(p.title), width) + "\n\n")
+	b.WriteString(layout.ClipLines(titleStyle.Render(p.title), width) + "\n\n")
 	if len(p.items) == 0 {
-		b.WriteString(clipLines(dimStyle.Render(i18n.T("picker.no_candidates")), width) + "\n")
+		b.WriteString(layout.ClipLines(dimStyle.Render(i18n.T("picker.no_candidates")), width) + "\n")
 	}
 	visible := visibleRows(height)
 	end := p.offset + visible
@@ -116,7 +117,7 @@ func (p picker) listView(height, width int) string {
 		if it.color != "" {
 			name = lipgloss.NewStyle().Foreground(lipgloss.Color("#" + it.color)).Render(name)
 		}
-		b.WriteString(clipLines(cursorPrefix(i == p.cursor)+box+" "+name, width) + "\n")
+		b.WriteString(layout.ClipLines(cursorPrefix(i == p.cursor)+box+" "+name, width) + "\n")
 	}
 	if p.err != "" {
 		b.WriteString("\n" + wrapErr(p.err, width) + "\n")
