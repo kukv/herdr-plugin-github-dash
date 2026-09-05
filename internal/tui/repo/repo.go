@@ -4,6 +4,7 @@ package repo
 import (
 	"context"
 
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/kukv/octoscope/internal/gh"
@@ -45,6 +46,7 @@ type Model struct {
 	src Source
 
 	repoName string
+	spin     spinner.Model
 
 	tab     tabID
 	cursors [2]int
@@ -55,13 +57,15 @@ type Model struct {
 }
 
 func New(src Source) Model {
-	m := Model{src: src}
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	m := Model{src: src, spin: s}
 	m.loading[m.tab] = true
 	return m
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(fetchRepoName(m.src), fetchList(m.src, m.tab))
+	return tea.Batch(m.spin.Tick, fetchRepoName(m.src), fetchList(m.src, m.tab))
 }
 
 func fetchList(src Source, t tabID) tea.Cmd {
@@ -109,6 +113,10 @@ func openWeb(src Source, ref gh.ItemRef) tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spin, cmd = m.spin.Update(msg)
+		return m, cmd
 	case repoNameMsg:
 		m.repoName = string(msg)
 		return m, nil
@@ -129,9 +137,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.loading[tabIssues] = false
 		return m, nil
 	case errMsg:
-		// The loading flags are left as they are: which tab the failed fetch
-		// belonged to is not knowable from here, and the parent takes the
-		// screen over anyway.
+		m.loading[m.tab] = false
 		err := msg.err
 		return m, func() tea.Msg { return ErrorMsg{err} }
 	case tea.KeyPressMsg:

@@ -67,6 +67,21 @@ func key(s string) tea.KeyMsg {
 	}
 }
 
+// fetchCmd picks the fetch out of the batch Refresh returns. The batch's
+// other member is the spinner tick, a command that sleeps a frame before it
+// reports, so the test takes the fetch rather than running everything.
+func fetchCmd(t *testing.T, cmd tea.Cmd) tea.Cmd {
+	t.Helper()
+	batch, ok := cmd().(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("got %T, want a batch of the spinner tick and the fetch", cmd())
+	}
+	if len(batch) != 2 {
+		t.Fatalf("batched %d commands, want the spinner tick and the fetch", len(batch))
+	}
+	return batch[1]
+}
+
 func press(m Model, k string) Model {
 	m, _ = m.Update(key(k))
 	return m
@@ -168,9 +183,10 @@ func TestAFetchThatFailsOnItsOwnStillReports(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("Refresh returned no command")
 	}
-	got, ok := cmd().(errMsg)
+	fetch := fetchCmd(t, cmd)
+	got, ok := fetch().(errMsg)
 	if !ok {
-		t.Fatalf("got %T, want errMsg", cmd())
+		t.Fatalf("got %T, want errMsg", fetch())
 	}
 	if got.err.Error() != "boom" {
 		t.Errorf("got %q, want boom", got.err)
@@ -188,14 +204,15 @@ func TestRefreshCancelsThePreviousFetch(t *testing.T) {
 	if first == nil || second == nil {
 		t.Fatal("Refresh returned no command")
 	}
+	firstFetch, secondFetch := fetchCmd(t, first), fetchCmd(t, second)
 	// The second Refresh cancelled the first one's context. A cancelled fetch
 	// reports nothing at all: an error screen for a refresh the user asked for
 	// would be worse than silence.
-	if msg := first(); msg != nil {
+	if msg := firstFetch(); msg != nil {
 		t.Errorf("first fetch: got %T, want no message", msg)
 	}
-	if _, ok := second().(workMsg); !ok {
-		t.Errorf("second fetch: got %T, want workMsg", second())
+	if _, ok := secondFetch().(workMsg); !ok {
+		t.Errorf("second fetch: got %T, want workMsg", secondFetch())
 	}
 	if f.calls != 2 {
 		t.Errorf("ListWork calls: got %d, want 2", f.calls)
@@ -233,8 +250,9 @@ func TestRKeyRefetchesTheBoard(t *testing.T) {
 	if !m.loading {
 		t.Error("r did not mark the board loading")
 	}
-	if _, ok := cmd().(workMsg); !ok {
-		t.Errorf("got %T, want workMsg", cmd())
+	fetch := fetchCmd(t, cmd)
+	if _, ok := fetch().(workMsg); !ok {
+		t.Errorf("got %T, want workMsg", fetch())
 	}
 	if f.calls != 1 {
 		t.Errorf("ListWork calls: got %d, want 1", f.calls)

@@ -90,8 +90,26 @@ func TestLoadingBoardSaysSo(t *testing.T) {
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m, _ = m.Refresh()
 	t.Cleanup(m.Cancel)
-	if out := m.View(); !strings.Contains(out, i18n.T("common.loading")) {
+	out := m.View()
+	if !strings.Contains(out, i18n.T("common.loading")) {
 		t.Errorf("a loading board does not say so:\n%s", out)
+	}
+	// The board draws its own spinner, as the repo list and the detail view
+	// do; "⣾" is the first frame of spinner.Dot.
+	if !strings.Contains(out, "⣾") {
+		t.Errorf("a loading board does not animate:\n%s", out)
+	}
+}
+
+func TestSpinnerTickAdvancesTheFrame(t *testing.T) {
+	m := New(&fakeSource{work: sampleWork()})
+	before := m.spin.View()
+	m, cmd := m.Update(m.spin.Tick())
+	if cmd == nil {
+		t.Fatal("a tick produced no follow-up command; the animation would stop")
+	}
+	if m.spin.View() == before {
+		t.Errorf("the spinner frame did not advance: still %q", before)
 	}
 }
 

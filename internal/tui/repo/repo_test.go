@@ -110,10 +110,50 @@ func TestEmptyPRList(t *testing.T) {
 	}
 }
 
-func TestLoadingShowsLoadingText(t *testing.T) {
+// spinnerFrame is the first frame of spinner.Dot, which is what a freshly
+// built model draws.
+const spinnerFrame = "⣾"
+
+func TestLoadingShowsSpinnerAndText(t *testing.T) {
 	m := New(&fakeSource{prs: samplePRs()})
-	if !strings.Contains(m.View(), "loading...") {
-		t.Errorf("view missing the loading text before the list arrives:\n%s", m.View())
+	view := m.View()
+	if !strings.Contains(view, "loading...") {
+		t.Errorf("view missing the loading text before the list arrives:\n%s", view)
+	}
+	if !strings.Contains(view, spinnerFrame) {
+		t.Errorf("view missing the spinner frame while loading:\n%s", view)
+	}
+}
+
+// TestInitStartsTheSpinnerAndTheFetches covers what Init batches: the spinner
+// tick, the repository name and the first list.
+func TestInitStartsTheSpinnerAndTheFetches(t *testing.T) {
+	f := &fakeSource{prs: samplePRs()}
+	m := New(f)
+	batch, ok := m.Init()().(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("Init = %T, want a batch", m.Init()())
+	}
+	if len(batch) != 3 {
+		t.Fatalf("Init batched %d commands, want the tick, the name and the list", len(batch))
+	}
+	if _, ok := batch[1]().(repoNameMsg); !ok {
+		t.Errorf("batch[1] = %T, want repoNameMsg", batch[1]())
+	}
+	if _, ok := batch[2]().(prListMsg); !ok {
+		t.Errorf("batch[2] = %T, want prListMsg", batch[2]())
+	}
+}
+
+func TestSpinnerTickAdvancesTheFrame(t *testing.T) {
+	m := New(&fakeSource{})
+	before := m.spin.View()
+	m, cmd := m.Update(m.spin.Tick())
+	if cmd == nil {
+		t.Fatal("a tick produced no follow-up command; the animation would stop")
+	}
+	if m.spin.View() == before {
+		t.Errorf("the spinner frame did not advance: still %q", before)
 	}
 }
 

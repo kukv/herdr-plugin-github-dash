@@ -27,7 +27,7 @@ func (m Model) View() string {
 		return m.pickerView()
 	}
 	if m.loading || m.pickerLoading {
-		return i18n.T("common.loading") + "\n"
+		return m.spin.View() + " " + i18n.T("common.loading") + "\n"
 	}
 	header := titleStyle.Render(m.title)
 	footer := dimStyle.Render(i18n.T("footer.detail_prefix") + m.stateFooterKey() + i18n.T("footer.detail_suffix"))
@@ -41,7 +41,7 @@ func (m Model) View() string {
 func (m Model) pickerView() string {
 	body := m.picker.listView(m.height)
 	if m.applying {
-		return body + "\n" + i18n.T("picker.applying") + "\n"
+		return body + "\n" + m.spin.View() + " " + i18n.T("picker.applying") + "\n"
 	}
 	return body + "\n" + dimStyle.Render(i18n.T("footer.picker"))
 }
@@ -77,7 +77,7 @@ func (m Model) confirmView() string {
 	b.WriteString(header + "\n\n")
 	b.WriteString(i18n.T(id))
 	if m.working {
-		b.WriteString(i18n.T("confirm.working") + "\n")
+		b.WriteString(m.spin.View() + " " + i18n.T("confirm.working") + "\n")
 	} else {
 		b.WriteString(dimStyle.Render(i18n.T("confirm.yes_no")))
 	}
@@ -92,7 +92,7 @@ func (m Model) composeView() string {
 		b.WriteString(i18n.T("common.error_prefix") + m.postErr + "\n\n")
 	}
 	if m.posting {
-		b.WriteString(i18n.T("compose.posting") + "\n")
+		b.WriteString(m.spin.View() + " " + i18n.T("compose.posting") + "\n")
 	} else {
 		b.WriteString(dimStyle.Render(i18n.T("footer.compose")))
 	}

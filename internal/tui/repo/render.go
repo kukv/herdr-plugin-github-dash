@@ -38,7 +38,7 @@ func (m Model) View() string {
 
 	switch {
 	case m.loading[m.tab]:
-		b.WriteString(i18n.T("common.loading") + "\n")
+		b.WriteString(m.spin.View() + " " + i18n.T("common.loading") + "\n")
 	case m.tab == tabPRs && len(m.prs) == 0:
 		b.WriteString(dimStyle.Render(i18n.T("list.no_open_prs")) + "\n")
 	case m.tab == tabIssues && len(m.issues) == 0:

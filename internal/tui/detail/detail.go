@@ -7,6 +7,7 @@ import (
 	"context"
 	"strings"
 
+	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -67,6 +68,7 @@ type Model struct {
 	width, height int
 
 	loading bool
+	spin    spinner.Model
 	body    viewport.Model
 	title   string
 	state   string
@@ -89,6 +91,8 @@ type Model struct {
 }
 
 func New(src Source, ref gh.ItemRef) Model {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
 	ta := textarea.New()
 	ta.Placeholder = i18n.T("compose.placeholder")
 	ta.ShowLineNumbers = false
@@ -96,13 +100,14 @@ func New(src Source, ref gh.ItemRef) Model {
 		src:      src,
 		ref:      ref,
 		loading:  true,
+		spin:     s,
 		body:     viewport.New(viewport.WithWidth(80), viewport.WithHeight(20)),
 		textarea: ta,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return fetch(m.src, m.ref)
+	return tea.Batch(m.spin.Tick, fetch(m.src, m.ref))
 }
 
 func fetch(src Source, ref gh.ItemRef) tea.Cmd {
@@ -235,6 +240,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.textarea.SetWidth(msg.Width)
 		m.textarea.SetHeight(max(msg.Height-6, 3))
 		return m, nil
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spin, cmd = m.spin.Update(msg)
+		return m, cmd
 	case prMsg:
 		m.loading = false
 		m.state = msg.State

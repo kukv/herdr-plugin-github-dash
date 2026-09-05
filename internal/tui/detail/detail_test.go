@@ -133,11 +133,35 @@ func key(s string) tea.KeyPressMsg {
 func prRef() gh.ItemRef    { return gh.ItemRef{Kind: gh.ItemPR, Number: 1} }
 func issueRef() gh.ItemRef { return gh.ItemRef{Kind: gh.ItemIssue, Number: 5} }
 
-// loaded returns a model whose item has already arrived.
+// loaded returns a model whose item has already arrived. It runs the fetch
+// directly rather than through Init, whose batch also holds the spinner tick
+// (a command that sleeps a frame before it reports); TestInitStartsTheFetch
+// covers Init itself.
 func loaded(f *fakeSource, ref gh.ItemRef) Model {
 	m := New(f, ref)
-	m, _ = m.Update(m.Init()())
+	m, _ = m.Update(fetch(f, ref)())
 	return m
+}
+
+// initFetch picks the fetch out of the batch Init returns.
+func initFetch(t *testing.T, m Model) tea.Cmd {
+	t.Helper()
+	batch, ok := m.Init()().(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("Init = %T, want a batch of the spinner tick and the fetch", m.Init()())
+	}
+	if len(batch) != 2 {
+		t.Fatalf("Init batched %d commands, want the spinner tick and the fetch", len(batch))
+	}
+	return batch[1]
+}
+
+func TestInitStartsTheFetch(t *testing.T) {
+	f := &fakeSource{pr: gh.PR{Number: 1, Title: "first pr"}}
+	m := New(f, prRef())
+	if _, ok := initFetch(t, m)().(prMsg); !ok {
+		t.Errorf("the batched fetch did not produce a prMsg")
+	}
 }
 
 func TestDetailRendersBodyAndComments(t *testing.T) {
@@ -176,7 +200,7 @@ func TestEscAndQCloseTheView(t *testing.T) {
 func TestFetchFailureBecomesErrorMsg(t *testing.T) {
 	f := &fakeSource{err: errors.New("gh pr: no git remotes found")}
 	m := New(f, prRef())
-	m, cmd := m.Update(m.Init()())
+	m, cmd := m.Update(initFetch(t, m)())
 	if m.loading {
 		t.Errorf("loading = true after a failed fetch, want false")
 	}
@@ -574,10 +598,71 @@ func TestConfirmIgnoresKeysWhileWorking(t *testing.T) {
 	}
 }
 
-func TestLoadingShowsLoadingText(t *testing.T) {
+// spinnerFrame is the first frame of spinner.Dot, which is what a freshly
+// built model draws.
+const spinnerFrame = "⣾"
+
+func TestLoadingShowsSpinnerAndText(t *testing.T) {
 	f := &fakeSource{pr: gh.PR{Number: 1, Title: "first pr"}}
 	m := New(f, prRef())
-	if !strings.Contains(m.View(), "loading...") {
-		t.Errorf("view missing the loading text before the fetch resolves:\n%s", m.View())
+	view := m.View()
+	if !strings.Contains(view, "loading...") {
+		t.Errorf("view missing the loading text before the fetch resolves:\n%s", view)
+	}
+	if !strings.Contains(view, spinnerFrame) {
+		t.Errorf("view missing the spinner frame while loading:\n%s", view)
+	}
+}
+
+// TestBusyStatesShowTheSpinner keeps the spinner on every screen that waits:
+// the detail fetch, a comment being posted, a close being applied and a label
+// edit being applied all animate, as they do in internal/ui today.
+func TestBusyStatesShowTheSpinner(t *testing.T) {
+	newPR := func() *fakeSource {
+		return &fakeSource{
+			pr:     gh.PR{Number: 1, Title: "first pr", State: "OPEN", Labels: []gh.Label{{Name: "bug"}}},
+			labels: []gh.Label{{Name: "bug"}, {Name: "wip"}},
+		}
+	}
+	cases := map[string]func(t *testing.T) Model{
+		"loading": func(*testing.T) Model { return New(newPR(), prRef()) },
+		"posting": func(*testing.T) Model {
+			m := loaded(newPR(), prRef())
+			m, _ = m.Update(key("c"))
+			m.textarea.SetValue("hello")
+			m, _ = m.Update(key("ctrl+s")) // the post cmd is deliberately not run
+			return m
+		},
+		"working": func(*testing.T) Model {
+			m := loaded(newPR(), prRef())
+			m, _ = m.Update(key("x"))
+			m, _ = m.Update(key("y")) // the state cmd is deliberately not run
+			return m
+		},
+		"applying": func(t *testing.T) Model {
+			m := openPicker(t, newPR(), prRef(), "l")
+			m, _ = m.Update(key("space"))
+			m, _ = m.Update(key("enter")) // the edit cmd is deliberately not run
+			return m
+		},
+	}
+	for name, build := range cases {
+		t.Run(name, func(t *testing.T) {
+			if view := build(t).View(); !strings.Contains(view, spinnerFrame) {
+				t.Errorf("%s view missing the spinner frame:\n%s", name, view)
+			}
+		})
+	}
+}
+
+func TestSpinnerTickAdvancesTheFrame(t *testing.T) {
+	m := New(&fakeSource{}, prRef())
+	before := m.spin.View()
+	m, cmd := m.Update(m.spin.Tick())
+	if cmd == nil {
+		t.Fatal("a tick produced no follow-up command; the animation would stop")
+	}
+	if m.spin.View() == before {
+		t.Errorf("the spinner frame did not advance: still %q", before)
 	}
 }

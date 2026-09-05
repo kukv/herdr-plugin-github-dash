@@ -6,6 +6,7 @@ import (
 	"context"
 	"time"
 
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/kukv/octoscope/internal/gh"
@@ -32,6 +33,7 @@ type Model struct {
 
 	width, height int
 	loading       bool
+	spin          spinner.Model
 	work          gh.Work
 	col, row      int
 
@@ -47,7 +49,9 @@ type Model struct {
 }
 
 func New(src Source) Model {
-	return Model{src: src}
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	return Model{src: src, spin: s}
 }
 
 // Refresh cancels any in-flight fetch and starts a new one. It is also how
@@ -59,7 +63,9 @@ func (m Model) Refresh() (Model, tea.Cmd) {
 	m.cancel = cancel
 	m.loading = true
 	src := m.src
-	return m, func() tea.Msg {
+	// The spinner ticks from here rather than from an Init the board does not
+	// have: the animation starts with the fetch it belongs to.
+	return m, tea.Batch(m.spin.Tick, func() tea.Msg {
 		w, err := src.ListWork(ctx)
 		// A cancelled fetch is not a failure: the user refreshed, left the tab
 		// or quit. Bubble Tea drops a nil message, so the stale fetch reports
@@ -73,7 +79,7 @@ func (m Model) Refresh() (Model, tea.Cmd) {
 			return errMsg{err}
 		}
 		return workMsg(w)
-	}
+	})
 }
 
 // Cancel stops the in-flight fetch. The parent calls it when the user quits.
@@ -94,6 +100,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spin, cmd = m.spin.Update(msg)
+		return m, cmd
 	case workMsg:
 		m.loading = false
 		m.releaseFetch()

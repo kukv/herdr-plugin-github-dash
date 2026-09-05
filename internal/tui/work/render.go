@@ -45,7 +45,7 @@ func (m Model) View() string {
 		return ""
 	}
 	if m.loading {
-		return clip(i18n.T("common.loading"), m.width)
+		return clip(m.spin.View()+" "+i18n.T("common.loading"), m.width)
 	}
 
 	var lines []string
