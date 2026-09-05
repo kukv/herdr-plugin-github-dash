@@ -2,14 +2,17 @@ package ui
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"golang.org/x/text/language"
 
 	"github.com/kukv/octoscope/internal/ghcli"
+	"github.com/kukv/octoscope/internal/i18n"
 )
 
 // fakeSource implements DataSource and records calls.
@@ -238,16 +241,19 @@ func TestErrorMsgShowsErrorScreen(t *testing.T) {
 	}
 }
 
-// TestErrorModelHandlesWindowSize guards the NewError path: bubbletea sends an
-// initial WindowSizeMsg on startup, and the resize handler touches the detail
-// viewport and textarea. NewError must construct those widgets (like New does)
-// or SetWidth dereferences an uninitialized internal viewport and panics.
-func TestErrorModelHandlesWindowSize(t *testing.T) {
-	m := NewError("boom")
-	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+// TestErrorMsgTranslatesGhNotFound guards that ErrGhNotFound is recognized via
+// errors.Is and rendered through the i18n catalog rather than shown as the
+// raw sentinel text (spec §6.1).
+func TestErrorMsgTranslatesGhNotFound(t *testing.T) {
+	t.Cleanup(func() { i18n.SetLanguage(language.English) })
+	i18n.SetLanguage(language.Japanese)
+
+	f := &fakeSource{}
+	m := loadedModel(f)
+	next, _ := m.Update(errorMsg{fmt.Errorf("gh pr list: %w", ghcli.ErrGhNotFound)})
 	m = next.(Model)
-	if !strings.Contains(m.View().Content, "boom") {
-		t.Errorf("error view missing text after resize:\n%s", m.View().Content)
+	if !strings.Contains(m.View().Content, i18n.T("error.gh_not_found")) {
+		t.Errorf("view missing translated gh_not_found text:\n%s", m.View().Content)
 	}
 }
 

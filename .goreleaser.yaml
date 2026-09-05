@@ -33,9 +33,4 @@ checksum:
   name_template: checksums.txt
 
 changelog:
-  use: github
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
-      - "^chore\\(deps\\):"
+  use: github-native

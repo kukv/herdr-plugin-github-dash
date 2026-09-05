@@ -10,6 +10,9 @@ other = "loading..."
 ["common.error_prefix"]
 other = "error: "
 
+["error.gh_not_found"]
+other = "gh CLI not found; install it and run: gh auth login"
+
 ["list.tab_prs"]
 other = "Pull Requests"
 

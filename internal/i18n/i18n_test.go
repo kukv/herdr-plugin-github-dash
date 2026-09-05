@@ -34,6 +34,15 @@ func TestPluralInEnglish(t *testing.T) {
 	}
 }
 
+func TestPluralInJapanese(t *testing.T) {
+	t.Cleanup(func() { i18n.SetLanguage(language.English) })
+	i18n.SetLanguage(language.Japanese)
+
+	if got := i18n.Tn("time.hours_ago", 3); got != "3 時間前" {
+		t.Errorf("n=3: %q", got)
+	}
+}
+
 func TestResolveOrder(t *testing.T) {
 	cases := []struct {
 		name          string
@@ -61,14 +70,30 @@ func TestCatalogsHaveTheSameIDs(t *testing.T) {
 	i18n.SetLanguage(language.Japanese)
 	ja := i18n.IDs()
 
-	missing := map[string]bool{}
+	inEn := map[string]bool{}
 	for _, id := range en {
-		missing[id] = true
+		inEn[id] = true
+	}
+	inJa := map[string]bool{}
+	for _, id := range ja {
+		inJa[id] = true
+	}
+
+	var missingFromJa, missingFromEn []string
+	for _, id := range en {
+		if !inJa[id] {
+			missingFromJa = append(missingFromJa, id)
+		}
 	}
 	for _, id := range ja {
-		delete(missing, id)
+		if !inEn[id] {
+			missingFromEn = append(missingFromEn, id)
+		}
 	}
-	if len(missing) > 0 {
-		t.Errorf("ja catalog is missing IDs: %v", missing)
+	if len(missingFromJa) > 0 {
+		t.Errorf("ja catalog is missing IDs: %v", missingFromJa)
+	}
+	if len(missingFromEn) > 0 {
+		t.Errorf("en catalog is missing IDs: %v", missingFromEn)
 	}
 }

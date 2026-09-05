@@ -3,6 +3,7 @@ package i18n
 
 import (
 	"embed"
+	"slices"
 	"sort"
 	"sync"
 
@@ -75,7 +76,7 @@ func Resolve(flagLang, osLocale string) language.Tag {
 func IDs() []string {
 	mu.RLock()
 	defer mu.RUnlock()
-	return catalog[current]
+	return slices.Clone(catalog[current])
 }
 
 // T renders the message with no template data.

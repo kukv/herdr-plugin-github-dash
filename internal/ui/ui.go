@@ -2,6 +2,7 @@
 package ui
 
 import (
+	"errors"
 	"strings"
 
 	"charm.land/bubbles/v2/spinner"
@@ -142,18 +143,6 @@ func New(src DataSource) Model {
 	}
 	m.listLoading[m.tab] = true
 	return m
-}
-
-// NewError builds a model that only shows an error message. It still constructs
-// the detail viewport and textarea because the shared WindowSizeMsg handler
-// resizes them, and v2's zero-value widgets panic on SetWidth.
-func NewError(text string) Model {
-	return Model{
-		screen:   screenError,
-		errText:  text,
-		detail:   viewport.New(viewport.WithWidth(80), viewport.WithHeight(20)),
-		textarea: textarea.New(),
-	}
 }
 
 func (m Model) Init() tea.Cmd {
@@ -414,7 +403,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case errorMsg:
 		m.screen = screenError
-		m.errText = msg.err.Error()
+		if errors.Is(msg.err, ghcli.ErrGhNotFound) {
+			m.errText = i18n.T("error.gh_not_found")
+		} else {
+			m.errText = msg.err.Error()
+		}
 		return m, nil
 	case tea.KeyMsg:
 		return m.handleKey(msg)
