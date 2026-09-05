@@ -315,21 +315,64 @@ func TestCursorClampsWhenTheListShrinks(t *testing.T) {
 	}
 }
 
-// TestJapaneseListViewFitsTheWidth guards that the Japanese catalog strings
-// fit within 80 display columns; View renders them verbatim and does no
-// rune-counting or truncation of its own.
-func TestJapaneseListViewFitsTheWidth(t *testing.T) {
+// overlongPRs is samplePRs plus an item whose title and author are wider than
+// any terminal the width test uses, in both scripts. Without it the fixture's
+// longest line is well inside 50 columns and the test would pass even with the
+// truncation removed.
+func overlongPRs() []gh.PR {
+	return append(samplePRs(), gh.PR{
+		Number: 9,
+		Title: "レンダリングのパイプラインをまるごと置き換える " +
+			"refactor that nobody asked for",
+		Author:    gh.Author{Login: "a-contributor-with-a-very-long-handle"},
+		UpdatedAt: time.Now(),
+	})
+}
+
+func overlongIssues() []gh.Issue {
+	return []gh.Issue{{
+		Number: 9,
+		Title: "ラベルの一覧が横に伸びつづける問題 " +
+			"and an English clause long enough to run off the screen",
+		Author:    gh.Author{Login: "another-contributor-with-a-long-handle"},
+		UpdatedAt: time.Now(),
+	}}
+}
+
+// TestNoLineExceedsTheTerminalWidth guards spec §6.4 across both scripts: a
+// Japanese character occupies two columns, so a line that fits in English can
+// still run off the screen in Japanese.
+func TestNoLineExceedsTheTerminalWidth(t *testing.T) {
 	t.Cleanup(func() { i18n.SetLanguage(language.English) })
-	i18n.SetLanguage(language.Japanese)
 
-	const width = 80
-	m := loadedModel(&fakeSource{prs: samplePRs()})
+	for _, lang := range []language.Tag{language.English, language.Japanese} {
+		i18n.SetLanguage(lang)
+		for _, width := range []int{50, 80, 100, 120} {
+			f := &fakeSource{prs: overlongPRs(), issues: overlongIssues()}
+			prs := sized(loadedModel(f), width)
+			issues, cmd := prs.Update(key("tab"))
+			issues, _ = issues.Update(cmd())
 
-	for _, line := range strings.Split(m.View(), "\n") {
-		if w := ansi.StringWidth(line); w > width {
-			t.Errorf("line is %d columns wide, want <= %d: %q", w, width, line)
+			for name, view := range map[string]string{
+				"prs":     prs.View(),
+				"issues":  issues.View(),
+				"loading": sized(New(f), width).View(),
+				"empty":   sized(loadedModel(&fakeSource{}), width).View(),
+			} {
+				for _, line := range strings.Split(view, "\n") {
+					if w := ansi.StringWidth(line); w > width {
+						t.Errorf("%s lang %s width %d: line is %d columns: %q",
+							name, lang, width, w, line)
+					}
+				}
+			}
 		}
 	}
+}
+
+func sized(m Model, width int) Model {
+	m, _ = m.Update(tea.WindowSizeMsg{Width: width, Height: 40})
+	return m
 }
 
 // TestNoUnresolvedIDsInRenderedViews guards spec §6.5. It renders each of the

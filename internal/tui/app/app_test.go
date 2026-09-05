@@ -452,25 +452,91 @@ func TestTheDetailViewHasNoTabRow(t *testing.T) {
 	}
 }
 
-func TestJapaneseRendersWithoutOverflow(t *testing.T) {
-	i18n.SetLanguage(language.Japanese)
+// overlongTitle is wider than any terminal the width test uses, in both
+// scripts, so the fixture reaches the edge at every width instead of leaving
+// the truncation untested.
+const overlongTitle = "レンダリングのパイプラインをまるごと置き換える " +
+	"refactor that nobody asked for"
+
+// overlongSource fills every tab with content that overflows on its own.
+func overlongSource() *fakeSource {
+	return &fakeSource{
+		work: gh.Work{
+			gh.SectionReviewRequested: {{
+				Ref:   gh.ItemRef{Kind: gh.ItemPR, Repo: "kukv/a-repository-nobody-would-name-this-way", Number: 1},
+				Title: overlongTitle,
+			}},
+		},
+		prs: []gh.PR{{
+			Number: 1, Title: overlongTitle,
+			Author: gh.Author{Login: "a-contributor-with-a-very-long-handle"},
+		}},
+		pr: gh.PR{Number: 1, Title: overlongTitle, State: "OPEN"},
+	}
+}
+
+// renderEveryScreen renders every screen the root can show at width.
+func renderEveryScreen(t *testing.T, width int) map[string]string {
+	t.Helper()
+	size := tea.WindowSizeMsg{Width: width, Height: 40}
+
+	src := overlongSource()
+	next, cmd := New(src, Options{HasRepo: true}).Update(size)
+	board := resolve(t, next.(Model), cmd)
+
+	repos, cmd := board.Update(key("2"))
+	repos = resolve(t, repos.(Model), cmd)
+
+	item, cmd := repos.Update(key("enter"))
+	item = resolve(t, item.(Model), cmd)
+
+	failed, _ := board.Update(work.ErrorMsg{Err: errors.New(overlongTitle)})
+
+	noRepo, cmd := New(src, Options{}).Update(size)
+	noRepo = resolve(t, noRepo.(Model), cmd)
+
+	return map[string]string{
+		"work":    content(board),
+		"repos":   content(repos.(Model)),
+		"detail":  content(item.(Model)),
+		"error":   content(failed.(Model)),
+		"no_repo": content(noRepo.(Model)),
+	}
+}
+
+// TestNoLineExceedsTheTerminalWidth guards spec §6.4 across every screen the
+// root can show. A Japanese character occupies two columns, so a line that
+// fits in English can still run off the screen in Japanese.
+func TestNoLineExceedsTheTerminalWidth(t *testing.T) {
 	t.Cleanup(func() { i18n.SetLanguage(language.English) })
 
-	src := &fakeSource{work: gh.Work{
-		gh.SectionReviewRequested: {{
-			Ref:   gh.ItemRef{Kind: gh.ItemPR, Repo: "kukv/koto", Number: 1},
-			Title: "日本語のタイトル",
-		}},
-	}}
-	m := New(src, Options{HasRepo: true})
-	next, cmd := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	m = resolve(t, next.(Model), cmd)
+	for _, lang := range []language.Tag{language.English, language.Japanese} {
+		i18n.SetLanguage(lang)
+		for _, width := range []int{50, 80, 100, 120} {
+			for name, view := range renderEveryScreen(t, width) {
+				for _, line := range strings.Split(view, "\n") {
+					if w := ansi.StringWidth(line); w > width {
+						t.Errorf("%s lang %s width %d: line is %d columns: %q",
+							name, lang, width, w, line)
+					}
+				}
+			}
+		}
+	}
+}
 
-	view := content(m)
-	i18n.AssertNoUnresolvedIDs(t, view)
-	for _, line := range strings.Split(view, "\n") {
-		if w := ansi.StringWidth(line); w > 80 {
-			t.Errorf("line is %d columns wide at 80 columns: %q", w, line)
+// TestNoUnresolvedIDsInTheRootViews guards spec §6.5: a message ID the code
+// asks for but the catalog of the active language does not carry renders as
+// "!the.id" rather than failing anywhere else.
+func TestNoUnresolvedIDsInTheRootViews(t *testing.T) {
+	t.Cleanup(func() { i18n.SetLanguage(language.English) })
+
+	for _, lang := range []language.Tag{language.English, language.Japanese} {
+		i18n.SetLanguage(lang)
+		for name, view := range renderEveryScreen(t, 80) {
+			t.Run(lang.String()+"/"+name, func(t *testing.T) {
+				i18n.AssertNoUnresolvedIDs(t, view)
+			})
 		}
 	}
 }

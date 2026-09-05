@@ -97,7 +97,7 @@ func TestPickerCursorAndScroll(t *testing.T) {
 
 func TestPickerListViewShowsItems(t *testing.T) {
 	p := newPicker(pickLabels, "Labels", []string{"bug", "wip"}, nil, []string{"bug"})
-	view := p.listView(20)
+	view := p.listView(20, 80)
 	for _, want := range []string{"Labels", "[x] bug", "[ ] wip"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("listView missing %q:\n%s", want, view)

@@ -95,11 +95,11 @@ func (p picker) diff() (add, remove []string) {
 	return add, remove
 }
 
-func (p picker) listView(height int) string {
+func (p picker) listView(height, width int) string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render(p.title) + "\n\n")
+	b.WriteString(clipLines(titleStyle.Render(p.title), width) + "\n\n")
 	if len(p.items) == 0 {
-		b.WriteString(dimStyle.Render(i18n.T("picker.no_candidates")) + "\n")
+		b.WriteString(clipLines(dimStyle.Render(i18n.T("picker.no_candidates")), width) + "\n")
 	}
 	visible := visibleRows(height)
 	end := p.offset + visible
@@ -116,10 +116,10 @@ func (p picker) listView(height int) string {
 		if it.color != "" {
 			name = lipgloss.NewStyle().Foreground(lipgloss.Color("#" + it.color)).Render(name)
 		}
-		b.WriteString(cursorPrefix(i == p.cursor) + box + " " + name + "\n")
+		b.WriteString(clipLines(cursorPrefix(i == p.cursor)+box+" "+name, width) + "\n")
 	}
 	if p.err != "" {
-		b.WriteString("\n" + i18n.T("common.error_prefix") + p.err + "\n")
+		b.WriteString("\n" + wrapErr(p.err, width) + "\n")
 	}
 	return b.String()
 }

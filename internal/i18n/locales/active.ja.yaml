@@ -90,11 +90,11 @@ work:
 
 footer:
   list:
-    other: "j/k:移動  enter:詳細  tab:PR/Issue  r:更新  o:ブラウザ  q:終了"
+    other: "j/k:移動  enter:詳細  tab:PR/Issue  r:更新  o:Web  q:終了"
   detail_prefix:
-    other: "j/k:スクロール  r:更新  o:ブラウザ  c:コメント  "
+    other: "j/k:移動  r:更新  o:Web  c:コメント  "
   detail_suffix:
-    other: "l:ラベル  a:担当者  esc:戻る"
+    other: "l:ラベル  a:担当  esc:戻る"
   close:
     other: "x:クローズ  "
   reopen:

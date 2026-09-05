@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/kukv/octoscope/internal/gh"
 	"github.com/kukv/octoscope/internal/i18n"
@@ -27,23 +28,48 @@ func (m Model) View() string {
 		return m.pickerView()
 	}
 	if m.loading || m.pickerLoading {
-		return m.spin.View() + " " + i18n.T("common.loading") + "\n"
+		return clipLines(m.spin.View()+" "+i18n.T("common.loading")+"\n", m.width)
 	}
 	header := titleStyle.Render(m.title)
 	footer := dimStyle.Render(i18n.T("footer.detail_prefix") + m.stateFooterKey() + i18n.T("footer.detail_suffix"))
-	body := header + "\n" + m.body.View() + "\n"
+	body := clipLines(header, m.width) + "\n" + m.body.View() + "\n"
 	if m.actionErr != "" {
-		body += i18n.T("common.error_prefix") + m.actionErr + "\n"
+		body += wrapErr(m.actionErr, m.width) + "\n"
 	}
-	return body + footer
+	return body + clipLines(footer, m.width)
+}
+
+// clipLines cuts every line of s to w display columns. Japanese takes two
+// columns per character, so the count is never a byte or a rune count. Before
+// the first tea.WindowSizeMsg there is no width to clip to.
+func clipLines(s string, w int) string {
+	if w <= 0 {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = ansi.Truncate(line, w, "…")
+	}
+	return strings.Join(lines, "\n")
+}
+
+// wrapErr lays out a failure that came from gh or GitHub. Unlike the hints and
+// titles around it, this text is the whole of what the user has to go on, so
+// it is wrapped rather than cut short (.claude/rules/errors.md).
+func wrapErr(text string, w int) string {
+	s := i18n.T("common.error_prefix") + text
+	if w <= 0 {
+		return s
+	}
+	return ansi.Wrap(s, w, "")
 }
 
 func (m Model) pickerView() string {
-	body := m.picker.listView(m.height)
+	body := m.picker.listView(m.height, m.width)
 	if m.applying {
-		return body + "\n" + m.spin.View() + " " + i18n.T("picker.applying") + "\n"
+		return body + "\n" + clipLines(m.spin.View()+" "+i18n.T("picker.applying"), m.width) + "\n"
 	}
-	return body + "\n" + dimStyle.Render(i18n.T("footer.picker"))
+	return body + "\n" + clipLines(dimStyle.Render(i18n.T("footer.picker")), m.width)
 }
 
 // stateFooterKey returns the state-aware footer hint (with trailing spaces),
@@ -74,27 +100,28 @@ func (m Model) confirmView() string {
 		id = "confirm.reopen_issue"
 	}
 	var b strings.Builder
-	b.WriteString(header + "\n\n")
+	b.WriteString(clipLines(header, m.width) + "\n\n")
 	b.WriteString(i18n.T(id))
 	if m.working {
 		b.WriteString(m.spin.View() + " " + i18n.T("confirm.working") + "\n")
 	} else {
 		b.WriteString(dimStyle.Render(i18n.T("confirm.yes_no")))
 	}
-	return b.String()
+	return clipLines(b.String(), m.width)
 }
 
 func (m Model) composeView() string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render(i18n.Tf("compose.title", map[string]any{"Title": m.title})) + "\n\n")
+	title := titleStyle.Render(i18n.Tf("compose.title", map[string]any{"Title": m.title}))
+	b.WriteString(clipLines(title, m.width) + "\n\n")
 	b.WriteString(m.textarea.View() + "\n\n")
 	if m.postErr != "" {
-		b.WriteString(i18n.T("common.error_prefix") + m.postErr + "\n\n")
+		b.WriteString(wrapErr(m.postErr, m.width) + "\n\n")
 	}
 	if m.posting {
-		b.WriteString(m.spin.View() + " " + i18n.T("compose.posting") + "\n")
+		b.WriteString(clipLines(m.spin.View()+" "+i18n.T("compose.posting"), m.width) + "\n")
 	} else {
-		b.WriteString(dimStyle.Render(i18n.T("footer.compose")))
+		b.WriteString(clipLines(dimStyle.Render(i18n.T("footer.compose")), m.width))
 	}
 	return b.String()
 }

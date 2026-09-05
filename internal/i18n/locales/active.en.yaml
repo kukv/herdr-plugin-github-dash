@@ -90,9 +90,9 @@ work:
 
 footer:
   list:
-    other: "j/k:move  enter:detail  tab:PR/Issue  r:refresh  o:browser  q:quit"
+    other: "j/k:move  enter:detail  tab:PR/Issue  r:refresh  o:web  q:quit"
   detail_prefix:
-    other: "j/k:scroll  r:refresh  o:browser  c:comment  "
+    other: "j/k:move  r:refresh  o:web  c:comment  "
   detail_suffix:
     other: "l:labels  a:assign  esc:back"
   close:
