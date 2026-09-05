@@ -127,7 +127,7 @@ type Model struct {
 	detailAssignees []string
 }
 
-func New(src DataSource, initial *Target) Model {
+func New(src DataSource) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	ta := textarea.New()
@@ -140,13 +140,7 @@ func New(src DataSource, initial *Target) Model {
 		detail:   viewport.New(viewport.WithWidth(80), viewport.WithHeight(20)),
 		textarea: ta,
 	}
-	if initial != nil {
-		m.screen = screenDetail
-		m.detailTarget = *initial
-		m.detailLoading = true
-	} else {
-		m.listLoading[m.tab] = true
-	}
+	m.listLoading[m.tab] = true
 	return m
 }
 
@@ -166,12 +160,7 @@ func (m Model) Init() tea.Cmd {
 	if m.screen == screenError {
 		return nil
 	}
-	cmds := []tea.Cmd{m.spin.Tick, fetchRepoName(m.src)}
-	if m.screen == screenDetail {
-		cmds = append(cmds, fetchDetail(m.src, m.detailTarget))
-	} else {
-		cmds = append(cmds, fetchList(m.src, m.tab))
-	}
+	cmds := []tea.Cmd{m.spin.Tick, fetchRepoName(m.src), fetchList(m.src, m.tab)}
 	return tea.Batch(cmds...)
 }
 

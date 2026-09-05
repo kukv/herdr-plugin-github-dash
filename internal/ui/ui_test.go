@@ -147,7 +147,7 @@ func key(s string) tea.KeyMsg {
 
 // loadedModel returns a Model with the PR list already loaded.
 func loadedModel(f *fakeSource) Model {
-	m := New(f, nil)
+	m := New(f)
 	next, _ := m.Update(prListMsg(f.prs))
 	return next.(Model)
 }
@@ -293,28 +293,6 @@ func TestEnterOpensDetailAndEscReturns(t *testing.T) {
 	m = next.(Model)
 	if m.screen != screenList {
 		t.Errorf("screen = %v after esc, want screenList", m.screen)
-	}
-}
-
-func TestDirectModeStartsOnDetailWithRepo(t *testing.T) {
-	f := &fakeSource{pr: ghcli.PR{Number: 7, Title: "external pr"}}
-	m := New(f, &Target{Kind: KindPR, Repo: "octo/hello", Number: 7})
-	if m.screen != screenDetail {
-		t.Fatalf("screen = %v, want screenDetail", m.screen)
-	}
-	next, _ := m.Update(fetchDetail(f, m.detailTarget)())
-	m = next.(Model)
-	if !strings.Contains(m.View().Content, "external pr") {
-		t.Errorf("view missing detail:\n%s", m.View().Content)
-	}
-	// o キーは Repo を引き継いでブラウザを開く
-	_, cmd := m.Update(key("o"))
-	if cmd == nil {
-		t.Fatal("cmd = nil, want openWeb cmd")
-	}
-	cmd()
-	if len(f.webCalls) != 1 || f.webCalls[0] != "pr:octo/hello:7" {
-		t.Errorf("webCalls = %v, want [pr:octo/hello:7]", f.webCalls)
 	}
 }
 
@@ -544,7 +522,7 @@ func TestComposeSubmitOnIssueRoutesToIssueComment(t *testing.T) {
 	}
 	// New model starts on the PR tab with an empty PR list; switch to Issues,
 	// load them, open detail for the issue, then compose.
-	m := New(f, nil)
+	m := New(f)
 	next, cmd := m.Update(key("tab")) // -> Issues tab, triggers fetchList
 	m = next.(Model)
 	next, _ = m.Update(cmd()) // issueListMsg
@@ -835,7 +813,7 @@ func TestConfirmSubmitOnIssueRoutesToClose(t *testing.T) {
 	}
 	// New model starts on the PR tab with an empty PR list; switch to Issues,
 	// load them, open detail for the issue, then confirm a close.
-	m := New(f, nil)
+	m := New(f)
 	next, cmd := m.Update(key("tab")) // -> Issues tab, triggers fetchList
 	m = next.(Model)
 	next, _ = m.Update(cmd()) // issueListMsg
@@ -1082,7 +1060,7 @@ func TestPickerApplyOnIssueRoutesToIssue(t *testing.T) {
 		issue:  ghcli.Issue{Number: 5, Title: "an issue", State: "OPEN"},
 		labels: []ghcli.Label{{Name: "bug"}},
 	}
-	m := New(f, nil)
+	m := New(f)
 	next, cmd := m.Update(key("tab")) // -> Issues
 	m = next.(Model)
 	next, _ = m.Update(cmd())
