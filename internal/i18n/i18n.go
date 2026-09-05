@@ -8,11 +8,11 @@ import (
 	"sync"
 
 	goi18n "github.com/nicksnyder/go-i18n/v2/i18n"
-	"github.com/pelletier/go-toml/v2"
+	yaml "go.yaml.in/yaml/v3"
 	"golang.org/x/text/language"
 )
 
-//go:embed locales/*.toml
+//go:embed locales/*.yaml
 var localeFS embed.FS
 
 // supported lists the languages with a catalog, most preferred first.
@@ -28,8 +28,8 @@ var (
 
 func init() {
 	bundle = goi18n.NewBundle(language.English)
-	bundle.RegisterUnmarshalFunc("toml", toml.Unmarshal)
-	for _, name := range []string{"locales/active.en.toml", "locales/active.ja.toml"} {
+	bundle.RegisterUnmarshalFunc("yaml", yaml.Unmarshal)
+	for _, name := range []string{"locales/active.en.yaml", "locales/active.ja.yaml"} {
 		f, err := bundle.LoadMessageFileFS(localeFS, name)
 		if err != nil {
 			// The catalogs are embedded, so a failure here is a build-time bug.

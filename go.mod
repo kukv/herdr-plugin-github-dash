@@ -10,7 +10,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.8
 	github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
-	github.com/pelletier/go-toml/v2 v2.4.3
+	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/text v0.41.0
 )
 

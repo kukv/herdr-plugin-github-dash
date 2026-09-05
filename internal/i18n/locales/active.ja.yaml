@@ -1,0 +1,107 @@
+app:
+  name:
+    other: "octoscope"
+  error_title:
+    other: "octoscope — エラー"
+
+common:
+  loading:
+    other: "読み込み中..."
+  error_prefix:
+    other: "エラー: "
+
+error:
+  gh_not_found:
+    other: "gh CLI が見つかりません。インストールして gh auth login を実行してください"
+
+list:
+  tab_prs:
+    other: "プルリクエスト"
+  tab_issues:
+    other: "Issue"
+  no_open_prs:
+    other: "オープンなプルリクエストはありません"
+  no_open_issues:
+    other: "オープンな Issue はありません"
+
+detail:
+  pr_title:
+    other: "PR #{{.Number}} {{.Title}}"
+  issue_title:
+    other: "Issue #{{.Number}} {{.Title}}"
+
+compose:
+  title:
+    other: "{{.Title}} にコメント"
+  placeholder:
+    other: "コメントを入力..."
+  posting:
+    other: "送信中..."
+
+picker:
+  labels:
+    other: "ラベル"
+  assignees:
+    other: "担当者"
+  applying:
+    other: "適用中..."
+  no_candidates:
+    other: "（候補がありません）"
+
+confirm:
+  close_pr:
+    other: "この PR をクローズしますか? "
+  reopen_pr:
+    other: "この PR を再オープンしますか? "
+  close_issue:
+    other: "この Issue をクローズしますか? "
+  reopen_issue:
+    other: "この Issue を再オープンしますか? "
+  yes_no:
+    other: "(y/n)"
+  working:
+    other: "処理中..."
+
+footer:
+  list:
+    other: "j/k:移動  enter:詳細  tab:PR/Issue  r:更新  o:ブラウザ  q:終了"
+  detail_prefix:
+    other: "j/k:スクロール  r:更新  o:ブラウザ  c:コメント  "
+  detail_suffix:
+    other: "l:ラベル  a:担当者  esc:戻る"
+  close:
+    other: "x:クローズ  "
+  reopen:
+    other: "x:再オープン  "
+  picker:
+    other: "space:選択  enter:適用  esc:中止"
+  compose:
+    other: "ctrl+s:送信  esc:中止"
+  error:
+    other: "q:終了"
+
+md:
+  author:
+    other: "作成者"
+  state:
+    other: "状態"
+  review:
+    other: "レビュー"
+  labels:
+    other: "ラベル"
+  updated:
+    other: "更新"
+  draft_suffix:
+    other: "（下書き）"
+  no_description:
+    other: "_説明はありません_"
+
+time:
+  now:
+    other: "たった今"
+  minutes_ago:
+    other: "{{.Count}} 分前"
+  hours_ago:
+    other: "{{.Count}} 時間前"
+  days_ago:
+    other: "{{.Count}} 日前"
