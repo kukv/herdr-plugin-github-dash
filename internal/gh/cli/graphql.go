@@ -2,64 +2,28 @@ package cli
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/kukv/octoscope/internal/gh"
 )
 
-// workSearches pairs each board column with its GraphQL alias and the search
-// query behind it (spec §4.1).
+//go:embed work.graphql
+var workQuery string
+
+// workSearches maps each board column to the GraphQL alias that carries it
+// in work.graphql. The query text lives in that file; nothing here builds
+// it, so there is no string to keep escaped.
 var workSearches = []struct {
 	section gh.WorkSection
 	alias   string
-	query   string
 }{
-	{gh.SectionReviewRequested, "reviewRequested", "is:open is:pr review-requested:@me"},
-	{gh.SectionYourPRs, "yourPRs", "is:open is:pr author:@me"},
-	{gh.SectionAssigned, "assigned", "is:open assignee:@me"},
-	{gh.SectionMentioned, "mentioned", "is:open mentions:@me"},
-}
-
-// workItemFields is the selection every column shares. reviewDecision and
-// isDraft are GraphQL-only: REST does not expose them (spec §3.3).
-const workItemFields = `
-    __typename
-    ... on PullRequest {
-      number title url isDraft updatedAt reviewDecision
-      author { login }
-      repository { nameWithOwner }
-      commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
-        __typename
-        ... on CheckRun { status conclusion }
-        ... on StatusContext { state }
-      } } } } } }
-    }
-    ... on Issue {
-      number title url updatedAt
-      author { login }
-      repository { nameWithOwner }
-    }`
-
-const workItemsPerColumn = 50
-
-// workQuery builds one document whose four aliased searches fill the board in
-// a single request. The search strings are compile-time constants of this
-// package, so %q's Go quoting is a valid GraphQL string literal for them; a
-// query that ever needs a quote or a backslash has to move to a $query
-// variable passed with -F instead.
-func workQuery() string {
-	var b strings.Builder
-	b.WriteString("query {")
-	for _, s := range workSearches {
-		fmt.Fprintf(&b,
-			"\n  %s: search(type: ISSUE, first: %d, query: %q) { nodes {%s\n  } }",
-			s.alias, workItemsPerColumn, s.query, workItemFields)
-	}
-	b.WriteString("\n}")
-	return b.String()
+	{gh.SectionReviewRequested, "reviewRequested"},
+	{gh.SectionYourPRs, "yourPRs"},
+	{gh.SectionAssigned, "assigned"},
+	{gh.SectionMentioned, "mentioned"},
 }
 
 type workResponse struct {
@@ -107,7 +71,7 @@ func (c *Client) ListWork(ctx context.Context) (gh.Work, error) {
 	// gh api graphql exits non-zero when the response body carries a top-level
 	// "errors" array, so a query GitHub rejects arrives here as an error from
 	// c.run rather than as a body we'd otherwise parse into empty columns.
-	out, err := c.run(ctx, c.dir, "api", "graphql", "-f", "query="+workQuery())
+	out, err := c.run(ctx, c.dir, "api", "graphql", "-f", "query="+workQuery)
 	if err != nil {
 		return gh.Work{}, err
 	}

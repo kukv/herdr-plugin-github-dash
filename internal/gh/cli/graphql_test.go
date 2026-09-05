@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"errors"
+	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -208,4 +210,66 @@ func flagValue(t *testing.T, args []string, flag string) string {
 	}
 	t.Fatalf("flag %q not found in %v", flag, args)
 	return ""
+}
+
+// querySelections is the query document with its comments stripped. A field
+// name mentioned only in prose must not count as selected.
+var querySelections = regexp.MustCompile(`(?m)#.*$`).ReplaceAllString(workQuery, "")
+
+// asksFor reports whether the query document selects the field name, as a
+// whole word: "status" must not be satisfied by "statusCheckRollup".
+func asksFor(name string) bool {
+	return regexp.MustCompile(`(^|\W)` + regexp.QuoteMeta(name) + `(\W|$)`).MatchString(querySelections)
+}
+
+// jsonNames collects the JSON field names of t and of every struct reachable
+// through it.
+func jsonNames(t reflect.Type) []string {
+	for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return nil
+	}
+	var names []string
+	for i := range t.NumField() {
+		f := t.Field(i)
+		if tag := f.Tag.Get("json"); tag != "" {
+			names = append(names, tag)
+		}
+		names = append(names, jsonNames(f.Type)...)
+	}
+	return names
+}
+
+// TestTheQueryAsksForEveryFieldWeParse ties work.graphql to the structs
+// ListWork unmarshals into. A field the query stops selecting still parses,
+// as a zero value that looks like real data -- an empty title, a draft that
+// is never a draft -- and no other test notices.
+func TestTheQueryAsksForEveryFieldWeParse(t *testing.T) {
+	t.Parallel()
+
+	names := jsonNames(reflect.TypeOf(searchNode{}))
+	names = append(names, jsonNames(reflect.TypeOf(checkNode{}))...)
+	if len(names) < 15 {
+		t.Fatalf("walked only %d fields (%v); the walk is not reaching the nested structs", len(names), names)
+	}
+	for _, name := range names {
+		if !asksFor(name) {
+			t.Errorf("the query never selects %q, so it always parses as a zero value", name)
+		}
+	}
+}
+
+// TestTheQueryCarriesEveryAliasWeReadBack guards the other seam: ListWork
+// keys the columns by the aliases in workSearches, and a column whose alias
+// is absent from the document reads back empty rather than failing.
+func TestTheQueryCarriesEveryAliasWeReadBack(t *testing.T) {
+	t.Parallel()
+
+	for _, s := range workSearches {
+		if !strings.Contains(workQuery, s.alias+": search(") {
+			t.Errorf("the query has no search aliased %q", s.alias)
+		}
+	}
 }
