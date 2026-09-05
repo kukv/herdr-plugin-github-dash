@@ -15,14 +15,18 @@ import (
 	"github.com/kukv/octoscope/internal/i18n"
 )
 
-// DataSource is what the UI needs from the GitHub layer.
-// repo is "owner/repo"; empty string targets the workspace repository.
-type DataSource interface {
+// listSource is what the list screen needs.
+// repo is "owner/repo"; the empty string targets the workspace repository.
+type listSource interface {
 	ListPRs() ([]gh.PR, error)
 	ListIssues() ([]gh.Issue, error)
+	RepoName() (string, error)
+}
+
+// detailSource is what the detail screen needs.
+type detailSource interface {
 	GetPR(repo string, number int) (gh.PR, error)
 	GetIssue(repo string, number int) (gh.Issue, error)
-	RepoName() (string, error)
 	OpenPRWeb(repo string, number int) error
 	OpenIssueWeb(repo string, number int) error
 	AddPRComment(repo string, number int, body string) error
@@ -31,12 +35,24 @@ type DataSource interface {
 	ReopenPR(repo string, number int) error
 	CloseIssue(repo string, number int) error
 	ReopenIssue(repo string, number int) error
+}
+
+// pickerSource is what the label / assignee picker needs.
+type pickerSource interface {
 	ListLabels(repo string) ([]gh.Label, error)
 	ListAssignees(repo string) ([]string, error)
 	EditPRLabels(repo string, number int, add, remove []string) error
 	EditIssueLabels(repo string, number int, add, remove []string) error
 	EditPRAssignees(repo string, number int, add, remove []string) error
 	EditIssueAssignees(repo string, number int, add, remove []string) error
+}
+
+// DataSource is the union the root model is handed; each screen takes only
+// the slice of it that it uses.
+type DataSource interface {
+	listSource
+	detailSource
+	pickerSource
 }
 
 type Kind int
@@ -153,7 +169,7 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func fetchList(src DataSource, t tabID) tea.Cmd {
+func fetchList(src listSource, t tabID) tea.Cmd {
 	return func() tea.Msg {
 		if t == tabPRs {
 			prs, err := src.ListPRs()
@@ -170,7 +186,7 @@ func fetchList(src DataSource, t tabID) tea.Cmd {
 	}
 }
 
-func fetchDetail(src DataSource, target Target) tea.Cmd {
+func fetchDetail(src detailSource, target Target) tea.Cmd {
 	return func() tea.Msg {
 		if target.Kind == KindPR {
 			pr, err := src.GetPR(target.Repo, target.Number)
@@ -187,7 +203,7 @@ func fetchDetail(src DataSource, target Target) tea.Cmd {
 	}
 }
 
-func fetchRepoName(src DataSource) tea.Cmd {
+func fetchRepoName(src listSource) tea.Cmd {
 	return func() tea.Msg {
 		name, err := src.RepoName()
 		if err != nil {
@@ -197,7 +213,7 @@ func fetchRepoName(src DataSource) tea.Cmd {
 	}
 }
 
-func openWeb(src DataSource, target Target) tea.Cmd {
+func openWeb(src detailSource, target Target) tea.Cmd {
 	return func() tea.Msg {
 		var err error
 		if target.Kind == KindPR {
@@ -212,7 +228,7 @@ func openWeb(src DataSource, target Target) tea.Cmd {
 	}
 }
 
-func postComment(src DataSource, target Target, body string) tea.Cmd {
+func postComment(src detailSource, target Target, body string) tea.Cmd {
 	return func() tea.Msg {
 		var err error
 		if target.Kind == KindPR {
@@ -240,7 +256,7 @@ func (m Model) stateAction() (closing bool, ok bool) {
 	}
 }
 
-func setState(src DataSource, target Target, closing bool) tea.Cmd {
+func setState(src detailSource, target Target, closing bool) tea.Cmd {
 	return func() tea.Msg {
 		var err error
 		switch {
@@ -260,7 +276,7 @@ func setState(src DataSource, target Target, closing bool) tea.Cmd {
 	}
 }
 
-func fetchLabelPicker(src DataSource, target Target) tea.Cmd {
+func fetchLabelPicker(src pickerSource, target Target) tea.Cmd {
 	return func() tea.Msg {
 		labels, err := src.ListLabels(target.Repo)
 		if err != nil {
@@ -270,7 +286,7 @@ func fetchLabelPicker(src DataSource, target Target) tea.Cmd {
 	}
 }
 
-func fetchAssigneePicker(src DataSource, target Target) tea.Cmd {
+func fetchAssigneePicker(src pickerSource, target Target) tea.Cmd {
 	return func() tea.Msg {
 		users, err := src.ListAssignees(target.Repo)
 		if err != nil {
@@ -280,7 +296,7 @@ func fetchAssigneePicker(src DataSource, target Target) tea.Cmd {
 	}
 }
 
-func applyPicker(src DataSource, target Target, kind pickerKind, add, remove []string) tea.Cmd {
+func applyPicker(src pickerSource, target Target, kind pickerKind, add, remove []string) tea.Cmd {
 	return func() tea.Msg {
 		var err error
 		switch {
