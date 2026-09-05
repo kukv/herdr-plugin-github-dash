@@ -106,7 +106,7 @@ footer:
   error:
     other: "q:quit"
   work:
-    other: "h/l:column  j/k:move  enter:detail  r:refresh  1/2:tab  q:quit"
+    other: "h/l:column  j/k:move  enter:detail  r:refresh  q:quit"
 
 md:
   author:

@@ -106,7 +106,7 @@ footer:
   error:
     other: "q:終了"
   work:
-    other: "h/l:列  j/k:移動  enter:詳細  r:再取得  1/2:タブ  q:終了"
+    other: "h/l:列  j/k:移動  enter:詳細  r:再取得  q:終了"
 
 md:
   author:

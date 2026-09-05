@@ -45,9 +45,12 @@ type ClosedMsg struct{}
 type ErrorMsg struct{ Err error }
 
 type (
-	prMsg               gh.PR
-	issueMsg            gh.Issue
-	errMsg              struct{ err error }
+	prMsg    gh.PR
+	issueMsg gh.Issue
+	errMsg   struct {
+		ref gh.ItemRef
+		err error
+	}
 	commentPostedMsg    struct{}
 	commentErrorMsg     struct{ err error }
 	stateChangedMsg     struct{}
@@ -116,13 +119,13 @@ func fetch(src Source, ref gh.ItemRef) tea.Cmd {
 		if ref.Kind == gh.ItemPR {
 			pr, err := src.GetPR(ctx, ref.Repo, ref.Number)
 			if err != nil {
-				return errMsg{err}
+				return errMsg{ref, err}
 			}
 			return prMsg(pr)
 		}
 		issue, err := src.GetIssue(ctx, ref.Repo, ref.Number)
 		if err != nil {
-			return errMsg{err}
+			return errMsg{ref, err}
 		}
 		return issueMsg(issue)
 	}
@@ -137,7 +140,7 @@ func openWeb(src Source, ref gh.ItemRef) tea.Cmd {
 			err = src.OpenIssueWeb(ref.Repo, ref.Number)
 		}
 		if err != nil {
-			return errMsg{err}
+			return errMsg{ref, err}
 		}
 		return nil
 	}
@@ -314,6 +317,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		return m, nil
 	case errMsg:
+		// A failure for an item the user has already left behind: the parent
+		// builds a fresh model per item, so an answer for another ref belongs
+		// to a request nobody is waiting for any more.
+		if msg.ref != m.ref {
+			return m, nil
+		}
 		m.loading = false
 		err := msg.err
 		return m, func() tea.Msg { return ErrorMsg{err} }

@@ -56,6 +56,28 @@ func TestViewShowsTheSelectedCardInTheDrawer(t *testing.T) {
 	}
 }
 
+// TestTheDrawerOnlyReportsChecksForPullRequests pins the difference between a
+// pull request whose checks have not run and an issue, which has no checks to
+// report at all.
+func TestTheDrawerOnlyReportsChecksForPullRequests(t *testing.T) {
+	checkless := press(loaded(), "j") // kukv/koto#3, a PR with no checks yet
+	if out := checkless.View(); !strings.Contains(out, i18n.T("work.no_checks")) {
+		t.Errorf("a PR without checks does not say so:\n%s", out)
+	}
+
+	issue := press(press(loaded(), "l"), "l") // kukv/octoscope#7, in Assigned
+	if _, ok := issue.SelectedRef(); !ok {
+		t.Fatal("no card is selected in the Assigned column")
+	}
+	out := issue.View()
+	if !strings.Contains(out, "kukv/octoscope#7") {
+		t.Fatalf("the drawer does not show the issue:\n%s", out)
+	}
+	if strings.Contains(out, i18n.T("work.no_checks")) {
+		t.Errorf("the drawer claims an issue has no checks:\n%s", out)
+	}
+}
+
 func TestEmptyColumnSaysSo(t *testing.T) {
 	if out := loaded().View(); !strings.Contains(out, i18n.T("work.empty_column")) {
 		t.Errorf("no empty-column marker for Your PRs:\n%s", out)

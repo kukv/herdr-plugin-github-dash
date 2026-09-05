@@ -147,17 +147,22 @@ func (m Model) drawer() []string {
 	}
 	it := m.work[m.section()][m.row]
 
+	lines := []string{
+		strings.Repeat("─", m.width),
+		clip(fmt.Sprintf("%s#%d %s", ref.Repo, ref.Number, it.Title), m.width),
+	}
+	// Issues have no checks at all, so they get no checks line either.
+	if ref.Kind == gh.ItemIssue {
+		return lines
+	}
+
 	summary := i18n.T("work.no_checks")
 	if c := it.Checks; c.Total > 0 {
 		summary = i18n.Tf("work.checks_summary", map[string]any{
 			"Passed": c.Passed, "Total": c.Total, "Failed": c.Failed, "Running": c.Running,
 		})
 	}
-	return []string{
-		strings.Repeat("─", m.width),
-		clip(fmt.Sprintf("%s#%d %s", ref.Repo, ref.Number, it.Title), m.width),
-		dimStyle.Render(clip(summary, m.width)),
-	}
+	return append(lines, dimStyle.Render(clip(summary, m.width)))
 }
 
 // visibleSections is the width degradation: too narrow for four columns and

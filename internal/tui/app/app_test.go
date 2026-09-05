@@ -24,6 +24,7 @@ type fakeSource struct {
 	work   gh.Work
 	prs    []gh.PR
 	pr     gh.PR
+	prErr  error
 	labels []gh.Label
 }
 
@@ -33,7 +34,7 @@ func (f *fakeSource) ListPRs(context.Context) ([]gh.PR, error)       { return f.
 func (f *fakeSource) ListIssues(context.Context) ([]gh.Issue, error) { return nil, nil }
 func (f *fakeSource) RepoName(context.Context) (string, error)       { return "kukv/demo", nil }
 
-func (f *fakeSource) GetPR(context.Context, string, int) (gh.PR, error) { return f.pr, nil }
+func (f *fakeSource) GetPR(context.Context, string, int) (gh.PR, error) { return f.pr, f.prErr }
 func (f *fakeSource) GetIssue(context.Context, string, int) (gh.Issue, error) {
 	return gh.Issue{}, nil
 }
@@ -234,13 +235,23 @@ func TestTheDetailViewGetsTheCurrentSize(t *testing.T) {
 }
 
 func TestErrorMsgShowsTheErrorScreen(t *testing.T) {
-	for name, msg := range map[string]tea.Msg{
-		"work":   work.ErrorMsg{Err: errors.New("boom")},
-		"repo":   repo.ErrorMsg{Err: errors.New("boom")},
-		"detail": detail.ErrorMsg{Err: errors.New("boom")},
+	// The detail view's error only counts while that view is on screen, so its
+	// case opens one first.
+	for name, tc := range map[string]struct {
+		open bool
+		msg  tea.Msg
+	}{
+		"work":   {msg: work.ErrorMsg{Err: errors.New("boom")}},
+		"repo":   {msg: repo.ErrorMsg{Err: errors.New("boom")}},
+		"detail": {open: true, msg: detail.ErrorMsg{Err: errors.New("boom")}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			next, _ := newTestModel(Options{HasRepo: true}).Update(msg)
+			m := newTestModel(Options{HasRepo: true})
+			if tc.open {
+				opened, _ := m.Update(work.OpenDetailMsg{Ref: gh.ItemRef{Kind: gh.ItemPR, Number: 1}})
+				m = opened.(Model)
+			}
+			next, _ := m.Update(tc.msg)
 			view := content(next.(Model))
 			if !strings.Contains(view, "boom") {
 				t.Errorf("the error screen does not show the message:\n%s", view)
@@ -522,6 +533,50 @@ func TestNoLineExceedsTheTerminalWidth(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestAClosedDetailViewDoesNotShowItsError covers the fetch that fails after
+// the user already left: nothing is on screen for that view any more, so the
+// failure has nowhere to go but away.
+func TestAClosedDetailViewDoesNotShowItsError(t *testing.T) {
+	m := newTestModel(Options{HasRepo: true})
+	next, _ := m.Update(work.OpenDetailMsg{Ref: gh.ItemRef{Kind: gh.ItemPR, Number: 1}})
+	m, cmd := pressCmd(next.(Model), "q")
+	m = resolve(t, m, cmd)
+	if m.showingDetail {
+		t.Fatal("q did not leave the detail view")
+	}
+
+	next, _ = m.Update(detail.ErrorMsg{Err: errors.New("boom")})
+	if view := content(next.(Model)); strings.Contains(view, "boom") {
+		t.Errorf("a closed detail view's error took over the screen:\n%s", view)
+	}
+}
+
+// TestAStaleDetailErrorDoesNotReplaceTheOpenOne covers the same failure
+// arriving after the user opened a second item: the error belongs to the
+// request the user abandoned, while the view now on screen has its own in
+// flight.
+func TestAStaleDetailErrorDoesNotReplaceTheOpenOne(t *testing.T) {
+	m := newTestModelWith(&fakeSource{prErr: errors.New("boom")}, Options{HasRepo: true})
+
+	next, first := m.Update(work.OpenDetailMsg{Ref: gh.ItemRef{Kind: gh.ItemPR, Number: 1}})
+	m, cmd := pressCmd(next.(Model), "q")
+	m = resolve(t, m, cmd)
+
+	next, second := m.Update(work.OpenDetailMsg{Ref: gh.ItemRef{Kind: gh.ItemPR, Number: 2}})
+	m = next.(Model)
+
+	m = resolve(t, m, first) // the first item's failure lands on the second
+	if view := content(m); strings.Contains(view, "boom") {
+		t.Errorf("a stale detail error took over the screen:\n%s", view)
+	}
+
+	// The control: the shown item's own failure still reaches the error screen.
+	m = resolve(t, m, second)
+	if view := content(m); !strings.Contains(view, "boom") {
+		t.Errorf("the open item's own error was suppressed too:\n%s", view)
 	}
 }
 

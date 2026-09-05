@@ -88,6 +88,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case repo.ErrorMsg:
 		return m.fail(msg.Err)
 	case detail.ErrorMsg:
+		// The detail view keeps requests in flight after the user leaves it.
+		// Their failures must not drag a closed view's error onto the screen.
+		if !m.showingDetail {
+			return m, nil
+		}
 		return m.fail(msg.Err)
 	}
 	return m.broadcast(msg)
