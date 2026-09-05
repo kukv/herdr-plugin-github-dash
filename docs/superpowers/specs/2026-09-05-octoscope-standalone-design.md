@@ -65,8 +65,8 @@ internal/tui/         Bubble Tea モデル群
   └ diff/             diff ビューア
 ```
 
-現在の `internal/ui/ui.go` は 728 行に一覧・詳細・コメント入力・ピッカーの
-状態がすべて同居している。ここにタブ・diff・checks を足すと確実に破綻するため、
+刷新前の UI は、一覧・詳細・コメント入力・ピッカーの状態が 1 つのモデルに
+同居していた。ここにタブ・diff・checks を足すと破綻するため、
 刷新の一環としてビュー単位のサブモデルへ分割する。各サブモデルは
 「何を表示するか」「どの操作を受け付けるか」を自身の `Update`/`View` に閉じ込め、
 親モデルとはメッセージ型のみで通信する。
@@ -185,7 +185,8 @@ PR / Issue の詳細からは、diff 閲覧、レビュー提出、checks 一覧
 
 ## 5. 設定ファイル
 
-`os.UserConfigDir()` 配下の `octoscope/config.toml` を読む。
+`os.UserConfigDir()` 配下の `octoscope/config.yaml` を読む。
+カタログと同じ形式に揃え、YAML のパーサを 1 つに保つ。
 これにより Windows（`%AppData%`）、macOS（`~/Library/Application Support`）、
 Linux（`~/.config`）で自然な場所に収まる。
 
@@ -198,6 +199,37 @@ Linux（`~/.config`）で自然な場所に収まる。
 | `default_tab` | 起動時に開くタブ |
 | `nerd_font` | Nerd Font グリフの使用可否の明示指定（既定は自動判定） |
 | `language` | 表示言語（`en` / `ja`、既定は自動判定） |
+
+### 5.1 フラグと設定の関係
+
+コマンドラインのフラグは**その場限りの上書き**に限る。恒久的な設定は設定ファイルに置く。
+
+Phase 0 時点のフラグは `--repo` / `--lang` / `--version` の 3 つで、
+フラグ定義はエントリポイントに直接書いてよい。ただしフェーズが進んでフラグが増える場合、
+**4 つを超えた時点で設定ファイル側に寄せられないかを先に検討する**。
+「毎回変える値」だけがフラグに残り、それ以外は設定ファイルへ移す。
+
+フラグを増やすかどうかの判定は「利用者が起動ごとに変える値か」。
+変えないならフラグではなく設定である。
+
+### 5.2 リリースと保護ルール
+
+配布は GoReleaser で行う。GoReleaser 自身は**コミットもタグも作らない**。
+既に存在するタグを読んで GitHub Release を作り、成果物を添付するだけである。
+タグを作るのは、ローカルで `git tag` して push する人間。
+
+`kukv/structure` のリポジトリモジュールはタグに対する保護ルールセット
+（作成・更新・削除を禁止）を張っており、bypass できるのは管理者ロールと
+`kita_chan_bot` の GitHub App だけである。したがって:
+
+- **タグを push できるのはリポジトリ管理者本人。** これは現在の運用と一致する
+- リリースワークフローの `GITHUB_TOKEN` は Release の作成にしか使わないので、
+  タグ保護には抵触しない
+- **将来 CI からタグを作る形にする場合**（release-please のような自動化を入れる、
+  Homebrew tap へ push するなど）は、`GITHUB_TOKEN` が bypass 対象でないため
+  必ず弾かれる。そのときは `kita_chan_bot` の App トークンに切り替える。
+  `GITHUB_TOKEN` で作った Release やタグは後続のワークフローを起動しない、
+  という別の制約もある
 
 ## 6. 多言語対応
 
@@ -228,8 +260,10 @@ Linux（`~/.config`）で自然な場所に収まる。
 ### 6.2 実装方針
 
 - カタログは `nicksnyder/go-i18n/v2` を使い、`internal/i18n` に置く
-- 翻訳ファイルは TOML（`active.en.toml`、`active.ja.toml`）とし、`go:embed` で
-  バイナリに埋め込む。3 OS でファイル配置を気にしなくて済む
+- 翻訳ファイルは YAML（`active.en.yaml`、`active.ja.yaml`）とし、`go:embed` で
+  バイナリに埋め込む。3 OS でファイル配置を気にしなくて済む。
+  メッセージ ID は `list.no_open_prs` のように階層を持つため、
+  ネストで表現できる YAML の方が読み書きしやすい
 - コード側はメッセージ ID で参照する（`i18n.T("work.review_requested")`）。
   日本語・英語のどちらもハードコードしない
 - 複数形は go-i18n の plural 機能に任せる。日本語には複数形が無いため
@@ -279,7 +313,9 @@ Linux（`~/.config`）で自然な場所に収まる。
   以降のフェーズでは、文字列を足すときに必ず両言語のカタログへ足す
 - GoReleaser 設定とリリースワークフローを追加（GitHub Actions は
   full-length commit SHA でピンする org ポリシーに従う）
-- README を全面的に書き換える
+- README を全面的に書き換える。英語版（`README.md`）と日本語版（`README.ja.md`）を
+  用意し、相互にリンクする。ツール自身が両言語に対応する以上、
+  入り口のドキュメントも揃える
 
 **検証**: `GOOS=windows/darwin/linux` のクロスコンパイルが通ること。
 `octoscope --repo kukv/octoscope` で既存の PR/Issue ビューが従来どおり動くこと。

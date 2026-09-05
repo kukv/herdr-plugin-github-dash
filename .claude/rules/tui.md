@@ -2,7 +2,7 @@
 
 ## ライブラリ
 
-Bubble Tea v2 系の import パスは **`charm.land/*/v2`**。
+Bubble Tea 系の import パスは **`charm.land/*/v2`**。
 
 ```go
 tea "charm.land/bubbletea/v2"
@@ -27,7 +27,7 @@ tea "charm.land/bubbletea/v2"
 親モデルとはメッセージ型でだけ通信し、親のフィールドを直接触らない。
 
 サブモデルが必要とするデータ取得の interface は、**そのサブモデルのファイルで宣言する**
-（`.claude/rules/architecture.md` を参照）。
+（`.claude/rules/architecture.md`）。
 
 ## 表示幅
 
@@ -35,12 +35,12 @@ tea "charm.land/bubbletea/v2"
 `github.com/charmbracelet/x/ansi` を使う。
 
 ```go
-w := ansi.StringWidth(s)   // 正しい
-w := len(s)                // バイト数。間違い
+w := ansi.StringWidth(s)       // 正しい
+w := len(s)                    // バイト数。間違い
 w := utf8.RuneCountInString(s) // 文字数。全角で 2 倍ずれる
 ```
 
-切り詰めも同様に、桁数ベースで行う。桁揃えするテーブル、カンバンのカード、
+切り詰めも桁数ベースで行う。桁を揃える表、幅の狭いカード、
 キーバインドを並べるフッターで特にずれやすい。
 
 ## 文字列
@@ -61,8 +61,8 @@ i18n.Tn("time.hours_ago", 3)   // 複数形。テンプレート変数は .Count
 - GitHub の検索構文（`is:open`、`label:`）
 - `--help` の出力。`--lang` を解析し終えるまで言語が決まらないため英語固定
 
-文字列を足すときは **`active.en.toml` と `active.ja.toml` の両方に足す。**
-片方だけだと `internal/i18n` のカタログ一致テストが落ちる。
+文字列を足すときは **`en` と `ja` の両方のカタログに足す。**
+片方だけだとカタログ整合のテストが落ちる。
 
 語順が言語で変わる文は、単語を連結せず文ごとメッセージ ID にする。
 「動詞 + 名詞」を組み立てる実装にしない。
