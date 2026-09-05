@@ -62,6 +62,24 @@ confirm:
   working:
     other: "処理中..."
 
+work:
+  review_requested:
+    other: "レビュー依頼"
+  your_prs:
+    other: "自分の PR"
+  assigned:
+    other: "担当"
+  mentioned:
+    other: "メンション"
+  empty_column:
+    other: "（なし）"
+  checks_summary:
+    other: "checks {{.Total}} 件中 {{.Passed}} 件成功 / {{.Failed}} 件失敗 / {{.Running}} 件実行中"
+  no_checks:
+    other: "checks なし"
+  column_position:
+    other: "{{.Index}}/{{.Total}} 列目"
+
 footer:
   list:
     other: "j/k:移動  enter:詳細  tab:PR/Issue  r:更新  o:ブラウザ  q:終了"
@@ -79,6 +97,8 @@ footer:
     other: "ctrl+s:送信  esc:中止"
   error:
     other: "q:終了"
+  work:
+    other: "h/l:列  j/k:移動  enter:詳細  r:再取得  1/2:タブ  q:終了"
 
 md:
   author:
