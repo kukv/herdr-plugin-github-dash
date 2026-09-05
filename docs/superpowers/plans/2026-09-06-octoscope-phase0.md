@@ -6,7 +6,7 @@
 
 **Architecture:** 既存の UI とデータ取得の構造には手を入れない。Herdr 依存（`internal/herdrctx`、`herdr-plugin.toml`、`open.sh`、`run.sh`、リンクハンドラ経路）を取り除き、対象リポジトリの決定を `--repo` フラグとカレントディレクトリの git remote に置き換える。表示文字列は `internal/i18n` のカタログへ移し、以降のフェーズで文字列を足すときは必ず両言語へ足す。配布は GoReleaser で 3 OS のバイナリを GitHub Releases に置く。
 
-**Tech Stack:** Go 1.26 / Bubble Tea v2 (`charm.land/bubbletea/v2`) / lipgloss v2 / `nicksnyder/go-i18n/v2` / `pelletier/go-toml/v2` / `jeandeaual/go-locale` / GoReleaser v2 / golangci-lint v2.13.2
+**Tech Stack:** Go 1.27 / Bubble Tea v2 (`charm.land/bubbletea/v2`) / lipgloss v2 / `nicksnyder/go-i18n/v2` / `pelletier/go-toml/v2` / `jeandeaual/go-locale` / GoReleaser v2 / golangci-lint v2.13.2
 
 **Spec:** `docs/superpowers/specs/2026-09-05-octoscope-standalone-design.md`
 
@@ -18,6 +18,7 @@
 - charmbracelet の TUI v2 は `charm.land/*/v2` が正しい import パス。`github.com/charmbracelet/*/v2` は使わない
 - 表示幅の計算は `github.com/charmbracelet/x/ansi` を使う。`len()` や `utf8.RuneCountInString()` で桁を数えない
 - カバレッジ基準は 80%（`.octocov.yml`）。下回ると CI が赤くなる
+- コーディング規約は `CLAUDE.md` と `.claude/rules/` にある。実装前に読むこと
 - 各タスクの完了時に `make check`（tidy-check / lint / fmt-check / test）が緑であること
 - **Phase 0 のスコープ外**（勝手にやらないこと）:
   - `internal/ghcli` → `internal/gh/cli` への移設、`internal/ui` のサブモデル分割（Phase 1）
@@ -203,7 +204,7 @@ Expected: PASS。`TestParseTarget` と herdrctx のテストは削除されて�
 - [ ] **Step 7: 削除漏れが無いことを確認する**
 
 Run: `grep -rn 'herdr\|Herdr\|HERDR' --include='*.go' --include='*.yml' --include='*.yaml' . ; echo "exit=$?"`
-Expected: Go ファイルとワークフローには一切残っていない（`exit=1`）。`README.md` と `docs/plugin-development-notes.md` にはまだ残るが、それらは Task 6 で扱う
+Expected: Go ファイルとワークフローには一切残っていない（`exit=1`）。`README.md` にはまだ残るが、それは Task 6 で扱う
 
 - [ ] **Step 8: 実際に起動して確認する**
 
@@ -1228,17 +1229,12 @@ changelog:
       - "^chore\\(deps\\):"
 ```
 
-- [ ] **Step 4: LICENSE を用意する**
+- [ ] **Step 4: LICENSE があることを確認する**
 
-このリポジトリには LICENSE ファイルが無い（`ls LICENSE*` で確認できる）。公開リポジトリでバイナリを配布する以上ライセンスは必要で、`.goreleaser.yaml` の `files:` も `LICENSE*` を同梱する指定になっている。
+Run: `head -3 LICENSE`
+Expected: `MIT License` と `Copyright (c) 2026 kukv`
 
-どのライセンスにするかは**ユーザーに確認する**。決まったら:
-
-```bash
-gh api /licenses/mit --jq .body > LICENSE   # MIT の場合
-```
-
-生成後、`[year]` と `[fullname]` のプレースホルダを実際の値に置き換える。確認が取れるまで次のステップに進まない。
+MIT ライセンスは計画作成時に追加済み。`.goreleaser.yaml` の `files:` の `LICENSE*` はこれを同梱する。無ければ `gh api /licenses/mit --jq .body > LICENSE` で作り、`[year]` と `[fullname]` を埋める。
 
 - [ ] **Step 5: 設定とクロスコンパイルを検証する**
 
@@ -1351,23 +1347,17 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `README.md`（全面書き換え）
-- Delete または Modify: `docs/plugin-development-notes.md`
 
 **Interfaces:**
 - Consumes: Task 2〜5 で確定した CLI のフラグとインストール手順
 - Produces: なし
 
-- [ ] **Step 1: `docs/plugin-development-notes.md` の扱いを確認する**
+- [ ] **Step 1: 旧 docs が削除済みであることを確認する**
 
-Run: `head -30 docs/plugin-development-notes.md`
+Run: `ls -R docs`
+Expected: `docs/superpowers/specs/2026-09-05-octoscope-standalone-design.md` と `docs/superpowers/plans/2026-09-06-octoscope-phase0.md` の 2 つだけ
 
-この文書は Herdr プラグイン開発の知見をまとめたもので、spec §10 の廃止リストには入っていない。Herdr 前提が無くなるため内容は古くなるが、**勝手に削除しない**。次のどれにするかをユーザーに確認する。
-
-1. 削除する
-2. `docs/archive/` に移して「Herdr プラグイン時代の記録」と冒頭に注記する
-3. そのまま残す
-
-確認が取れるまで、このファイルには触れない。
+`docs/plugin-development-notes.md` と Herdr 時代の spec / plan は計画作成時に削除済み。残っていたら削除する。
 
 - [ ] **Step 2: README を書き換える**
 
@@ -1536,7 +1526,5 @@ Expected: Release ワークフローが走り、6 つのアーカイブと `chec
 
 **未確定として残している点**（実装時に判断が要る）
 
-- Task 4 Step 7 の `confirmView`: Task 2 で `Target` を削除した後、Model が PR / Issue の別をどう保持しているかは既存コードを読んで合わせる
 - Task 4 Step 10 の `newTestModelWithData`: 既存テストヘルパーの実名に合わせる
-- Task 5 Step 7 の goreleaser-action の SHA: 取得コマンドを実行して埋める
-- Task 6 Step 1 の `docs/plugin-development-notes.md`: ユーザーに確認する
+- Task 5 Step 8 の goreleaser-action の SHA: 取得コマンドを実行して埋める
