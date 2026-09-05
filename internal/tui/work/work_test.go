@@ -161,6 +161,22 @@ func TestFetchFailureBecomesAnErrorMsg(t *testing.T) {
 	}
 }
 
+func TestAFetchThatFailsOnItsOwnStillReports(t *testing.T) {
+	m := New(&fakeSource{err: errors.New("boom")})
+	m, cmd := m.Refresh()
+	t.Cleanup(m.Cancel)
+	if cmd == nil {
+		t.Fatal("Refresh returned no command")
+	}
+	got, ok := cmd().(errMsg)
+	if !ok {
+		t.Fatalf("got %T, want errMsg", cmd())
+	}
+	if got.err.Error() != "boom" {
+		t.Errorf("got %q, want boom", got.err)
+	}
+}
+
 func TestRefreshCancelsThePreviousFetch(t *testing.T) {
 	f := &fakeSource{work: sampleWork()}
 	m := New(f)
@@ -172,10 +188,11 @@ func TestRefreshCancelsThePreviousFetch(t *testing.T) {
 	if first == nil || second == nil {
 		t.Fatal("Refresh returned no command")
 	}
-	// The second Refresh cancelled the first one's context, so the first
-	// command reports a dead context instead of the fetched board.
-	if _, ok := first().(errMsg); !ok {
-		t.Errorf("first fetch: got %T, want errMsg", first())
+	// The second Refresh cancelled the first one's context. A cancelled fetch
+	// reports nothing at all: an error screen for a refresh the user asked for
+	// would be worse than silence.
+	if msg := first(); msg != nil {
+		t.Errorf("first fetch: got %T, want no message", msg)
 	}
 	if _, ok := second().(workMsg); !ok {
 		t.Errorf("second fetch: got %T, want workMsg", second())
@@ -197,6 +214,9 @@ func TestRefreshMarksTheBoardLoading(t *testing.T) {
 	}
 	if m, _ = m.Update(workMsg(sampleWork())); m.loading {
 		t.Error("the board is still loading after its data arrived")
+	}
+	if m.cancel != nil {
+		t.Error("the finished fetch's context is still held")
 	}
 }
 

@@ -1,8 +1,10 @@
 package work
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -117,6 +119,77 @@ func TestNoLineExceedsTheTerminalWidth(t *testing.T) {
 			}
 		}
 	}
+}
+
+// alignedWork gives every column one card carrying tokens that appear nowhere
+// else, so the alignment test can measure where each column actually starts
+// instead of trusting the padding that produced it.
+func alignedWork() gh.Work {
+	now := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
+	var w gh.Work
+	for i, s := range gh.WorkSections() {
+		w[s] = []gh.WorkItem{{
+			Ref:       gh.ItemRef{Kind: gh.ItemPR, Repo: fmt.Sprintf("repo-%d", i), Number: i},
+			Title:     fmt.Sprintf("title-%d", i),
+			UpdatedAt: now,
+		}}
+	}
+	return w
+}
+
+func TestEveryRowStartsItsColumnsAtTheSameOffset(t *testing.T) {
+	t.Cleanup(func() { i18n.SetLanguage(language.English) })
+
+	for _, lang := range []language.Tag{language.English, language.Japanese} {
+		i18n.SetLanguage(lang)
+		for _, width := range []int{80, 100, 120} {
+			m := New(&fakeSource{work: alignedWork()})
+			m, _ = m.Update(tea.WindowSizeMsg{Width: width, Height: 40})
+			m, _ = m.Update(workMsg(alignedWork()))
+
+			colW := m.columnWidth(m.columns())
+			measured := 0
+			for _, line := range strings.Split(m.View(), "\n") {
+				s := ansi.Strip(line)
+				// The drawer repeats the selected card's tokens outside the
+				// columns; it is the only line with a "#" in this fixture.
+				if strings.Contains(s, "#") {
+					continue
+				}
+				for i := range m.columns() {
+					start := i * (colW + columnGap)
+					// The heading and the repository row sit in the cursor
+					// gutter; a title row also carries the review glyph.
+					measured += checkTokenOffset(t, lang, width, s,
+						i18n.T(sectionTitleIDs[gh.WorkSections()[i]]), start+2)
+					measured += checkTokenOffset(t, lang, width, s, fmt.Sprintf("repo-%d", i), start+2)
+					measured += checkTokenOffset(t, lang, width, s, fmt.Sprintf("title-%d", i), start+4)
+				}
+			}
+			// One heading, one title and one repository row per column: an
+			// assertion that never found its token would prove nothing.
+			if want := 3 * m.columns(); measured != want {
+				t.Errorf("lang %s width %d: measured %d offsets, want %d",
+					lang, width, measured, want)
+			}
+		}
+	}
+}
+
+// checkTokenOffset fails t when token appears in line at any display column
+// other than want. A line without the token says nothing and is skipped; the
+// return value counts the lines that did carry it.
+func checkTokenOffset(t *testing.T, lang language.Tag, width int, line, token string, want int) int {
+	t.Helper()
+	i := strings.Index(line, token)
+	if i < 0 {
+		return 0
+	}
+	if got := ansi.StringWidth(line[:i]); got != want {
+		t.Errorf("lang %s width %d: %q starts at column %d, want %d: %q",
+			lang, width, token, got, want, line)
+	}
+	return 1
 }
 
 func TestNoUnresolvedIDsInTheWorkView(t *testing.T) {

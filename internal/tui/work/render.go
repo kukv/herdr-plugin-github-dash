@@ -23,6 +23,11 @@ const (
 	columnGap         = 2
 	drawerMinColumns  = 100
 	singleColumnBelow = 60
+
+	// gutter is the column the cursor marker lives in. Unselected cards keep
+	// it blank rather than closing it up, so card text does not jump sideways
+	// as the cursor moves.
+	gutter = "  "
 )
 
 // sectionTitleIDs maps a column to its heading in the catalog.
@@ -88,13 +93,16 @@ func (m Model) board(sections []gh.WorkSection) []string {
 }
 
 func (m Model) columnLines(s gh.WorkSection, w int) []string {
+	// The heading text is indented by the cursor gutter so it starts in the
+	// same column as the card titles below it. The rule is not: it marks how
+	// far the column reaches, which is the whole of its width.
 	lines := []string{
-		headingStyle.Render(fit(i18n.T(sectionTitleIDs[s]), w)),
+		headingStyle.Render(fit(gutter+i18n.T(sectionTitleIDs[s]), w)),
 		fit(strings.Repeat("─", w), w),
 	}
 	items := m.work[s]
 	if len(items) == 0 {
-		return append(lines, dimStyle.Render(fit(i18n.T("work.empty_column"), w)))
+		return append(lines, dimStyle.Render(fit(gutter+i18n.T("work.empty_column"), w)))
 	}
 	for i, it := range items {
 		lines = append(lines, cardLines(it, w, s == m.section() && i == m.row, m.fetchedAt)...)
@@ -104,7 +112,7 @@ func (m Model) columnLines(s gh.WorkSection, w int) []string {
 
 // cardLines draws one card: what it is, where it lives, and how it is doing.
 func cardLines(it gh.WorkItem, w int, selected bool, now time.Time) []string {
-	marker := "  "
+	marker := gutter
 	if selected {
 		marker = "▸ "
 	}
@@ -117,7 +125,7 @@ func cardLines(it gh.WorkItem, w int, selected bool, now time.Time) []string {
 		title = cursorStyle.Render(title)
 	}
 
-	status := "  "
+	status := gutter
 	if bar := icon.ChecksBar(it.Checks); bar != "" {
 		status += bar + " "
 	}
@@ -125,7 +133,7 @@ func cardLines(it gh.WorkItem, w int, selected bool, now time.Time) []string {
 
 	return []string{
 		title,
-		dimStyle.Render(fit("  "+it.Ref.Repo, w)),
+		dimStyle.Render(fit(gutter+it.Ref.Repo, w)),
 		dimStyle.Render(fit(status, w)),
 	}
 }

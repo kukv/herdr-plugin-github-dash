@@ -61,6 +61,14 @@ func (m Model) Refresh() (Model, tea.Cmd) {
 	src := m.src
 	return m, func() tea.Msg {
 		w, err := src.ListWork(ctx)
+		// A cancelled fetch is not a failure: the user refreshed, left the tab
+		// or quit. Bubble Tea drops a nil message, so the stale fetch reports
+		// nothing instead of an error screen. The context is what says so —
+		// cancelling a gh subprocess surfaces as "signal: killed", not as a
+		// wrapped context.Canceled.
+		if ctx.Err() != nil {
+			return nil
+		}
 		if err != nil {
 			return errMsg{err}
 		}
@@ -75,17 +83,26 @@ func (m Model) Cancel() {
 	}
 }
 
+// releaseFetch frees the context of the fetch that just landed, so a finished
+// request leaves nothing behind to cancel.
+func (m *Model) releaseFetch() {
+	m.Cancel()
+	m.cancel = nil
+}
+
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case workMsg:
 		m.loading = false
+		m.releaseFetch()
 		m.work = gh.Work(msg)
 		m.fetchedAt = time.Now()
 		m.clampCursor()
 	case errMsg:
 		m.loading = false
+		m.releaseFetch()
 		err := msg.err
 		return m, func() tea.Msg { return ErrorMsg{err} }
 	case tea.KeyPressMsg:
