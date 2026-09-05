@@ -12,10 +12,44 @@ octoscope = **Octo**cat + **-scope**: a telescope for looking over your GitHub w
 
 ## Install
 
-Download a binary for your platform from the
-[releases page](https://github.com/kukv/octoscope/releases), or build from source:
+### mise
+
+[mise](https://mise.jdx.dev/) installs the released binary from GitHub Releases:
+
+    mise use -g github:kukv/octoscope@latest
+
+Or pin it per project in `mise.toml`:
+
+    [tools]
+    "github:kukv/octoscope" = "latest"
+
+### Manual download
+
+Grab the archive for your platform from the
+[releases page](https://github.com/kukv/octoscope/releases), extract it, and put
+`octoscope` somewhere on your `PATH`:
+
+    tar xzf octoscope_<version>_linux_amd64.tar.gz
+    install -m 0755 octoscope ~/.local/bin/
+
+On Windows, unzip the archive and place `octoscope.exe` in a directory on `PATH`.
+
+`checksums.txt` is published alongside the archives:
+
+    sha256sum -c checksums.txt --ignore-missing
+
+### go install
 
     go install github.com/kukv/octoscope/cmd/octoscope@latest
+
+`--version` prints `dev` with this method; the version string is stamped in at
+release build time.
+
+### Build from source
+
+    git clone https://github.com/kukv/octoscope.git
+    cd octoscope
+    go build -o octoscope ./cmd/octoscope
 
 ## Usage
 
