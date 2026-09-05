@@ -348,7 +348,8 @@ func (c *Client) effectiveRepo(repo string) string {
 置換の指針は 3 通り。
 
 1. **`--repo` を取るサブコマンド**（`pr`、`issue`、`label`）: `appendRepo(args, c.effectiveRepo(repo))` にする。
-   `ListPRs` / `ListIssues` / `ListLabels` は引数に `repo` を取らないので `c.repo` を渡す:
+   `ListPRs` / `ListIssues` は引数に `repo` を取らないので `c.repo` を渡す
+   （`ListLabels` は `repo` 引数を取るので `c.effectiveRepo(repo)` 側）:
 
 ```go
 func (c *Client) ListPRs() ([]PR, error) {
@@ -382,7 +383,7 @@ func (c *Client) ListAssignees(repo string) ([]string, error) {
 	// 以下は既存のまま
 ```
 
-`GetPR` / `GetIssue` / `OpenPRWeb` / `OpenIssueWeb` / `AddPRComment` / `AddIssueComment` / `ClosePR` / `ReopenPR` / `CloseIssue` / `ReopenIssue` / `editItems` は、`appendRepo(args, repo)` を `appendRepo(args, c.effectiveRepo(repo))` に置き換える。
+`GetPR` / `GetIssue` / `OpenPRWeb` / `OpenIssueWeb` / `AddPRComment` / `AddIssueComment` / `ClosePR` / `ReopenPR` / `CloseIssue` / `ReopenIssue` / `ListLabels` / `editItems` は、`appendRepo(args, repo)` を `appendRepo(args, c.effectiveRepo(repo))` に置き換える。
 
 - [ ] **Step 5: テストが通ることを確認する**
 
