@@ -10,16 +10,34 @@ import (
 	"github.com/kukv/octoscope/internal/gh"
 )
 
-// Source is what the repository list needs from the GitHub layer.
-// The list always shows the client's own repository, so only the two
-// browser-opening calls name one: repo is "owner/repo", and the empty string
+// prSource is the pull-request half of what the list needs.
+// The list always shows the client's own repository, so only the
+// browser-opening call names one: repo is "owner/repo", and the empty string
 // targets that same repository.
-type Source interface {
+type prSource interface {
 	ListPRs(ctx context.Context) ([]gh.PR, error)
-	ListIssues(ctx context.Context) ([]gh.Issue, error)
-	RepoName(ctx context.Context) (string, error)
 	OpenPRWeb(repo string, number int) error
+}
+
+// issueSource mirrors prSource for issues.
+type issueSource interface {
+	ListIssues(ctx context.Context) ([]gh.Issue, error)
 	OpenIssueWeb(repo string, number int) error
+}
+
+// repoNamer names the repository shown in the header. It stands alone
+// because it belongs to neither kind.
+type repoNamer interface {
+	RepoName(ctx context.Context) (string, error)
+}
+
+// Source is what the repository list needs from the GitHub layer. A command
+// that acts on one kind takes that half; the ones that pick the kind at run
+// time take the whole.
+type Source interface {
+	prSource
+	issueSource
+	repoNamer
 }
 
 // OpenDetailMsg asks the parent to show the detail view for one item.
@@ -87,7 +105,7 @@ func fetchList(src Source, t tabID) tea.Cmd {
 	}
 }
 
-func fetchRepoName(src Source) tea.Cmd {
+func fetchRepoName(src repoNamer) tea.Cmd {
 	return func() tea.Msg {
 		name, err := src.RepoName(context.Background())
 		if err != nil {

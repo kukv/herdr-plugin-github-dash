@@ -17,25 +17,45 @@ import (
 	"github.com/kukv/octoscope/internal/i18n"
 )
 
-// Source is what the detail view needs from the GitHub layer.
+// prSource is the pull-request half of what the detail view needs.
 // repo is "owner/repo"; the empty string targets the workspace repository.
-type Source interface {
+type prSource interface {
 	GetPR(ctx context.Context, repo string, number int) (gh.PR, error)
-	GetIssue(ctx context.Context, repo string, number int) (gh.Issue, error)
 	OpenPRWeb(repo string, number int) error
-	OpenIssueWeb(repo string, number int) error
 	AddPRComment(repo string, number int, body string) error
-	AddIssueComment(repo string, number int, body string) error
 	ClosePR(repo string, number int) error
 	ReopenPR(repo string, number int) error
+	EditPRLabels(repo string, number int, add, remove []string) error
+	EditPRAssignees(repo string, number int, add, remove []string) error
+}
+
+// issueSource mirrors prSource for issues. The two are kept apart rather
+// than merged so that adding a PR-only call cannot silently imply an issue
+// equivalent that GitHub does not offer.
+type issueSource interface {
+	GetIssue(ctx context.Context, repo string, number int) (gh.Issue, error)
+	OpenIssueWeb(repo string, number int) error
+	AddIssueComment(repo string, number int, body string) error
 	CloseIssue(repo string, number int) error
 	ReopenIssue(repo string, number int) error
+	EditIssueLabels(repo string, number int, add, remove []string) error
+	EditIssueAssignees(repo string, number int, add, remove []string) error
+}
+
+// candidateSource lists what a picker offers. Labels and assignees belong to
+// the repository, not to a PR or an issue, so this too is kind-free.
+type candidateSource interface {
 	ListLabels(ctx context.Context, repo string) ([]gh.Label, error)
 	ListAssignees(ctx context.Context, repo string) ([]string, error)
-	EditPRLabels(repo string, number int, add, remove []string) error
-	EditIssueLabels(repo string, number int, add, remove []string) error
-	EditPRAssignees(repo string, number int, add, remove []string) error
-	EditIssueAssignees(repo string, number int, add, remove []string) error
+}
+
+// Source is what the detail view needs from the GitHub layer. A command that
+// acts on one kind takes that half; the ones that pick the kind at run time
+// take the whole.
+type Source interface {
+	prSource
+	issueSource
+	candidateSource
 }
 
 // ClosedMsg tells the parent the user left the detail view.
@@ -194,7 +214,7 @@ func setState(src Source, ref gh.ItemRef, closing bool) tea.Cmd {
 	}
 }
 
-func fetchLabelPicker(src Source, ref gh.ItemRef) tea.Cmd {
+func fetchLabelPicker(src candidateSource, ref gh.ItemRef) tea.Cmd {
 	return func() tea.Msg {
 		labels, err := src.ListLabels(context.Background(), ref.Repo)
 		if err != nil {
@@ -204,7 +224,7 @@ func fetchLabelPicker(src Source, ref gh.ItemRef) tea.Cmd {
 	}
 }
 
-func fetchAssigneePicker(src Source, ref gh.ItemRef) tea.Cmd {
+func fetchAssigneePicker(src candidateSource, ref gh.ItemRef) tea.Cmd {
 	return func() tea.Msg {
 		users, err := src.ListAssignees(context.Background(), ref.Repo)
 		if err != nil {
