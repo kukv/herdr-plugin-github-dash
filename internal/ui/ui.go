@@ -11,17 +11,17 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
 
-	"github.com/kukv/octoscope/internal/ghcli"
+	"github.com/kukv/octoscope/internal/gh"
 	"github.com/kukv/octoscope/internal/i18n"
 )
 
 // DataSource is what the UI needs from the GitHub layer.
 // repo is "owner/repo"; empty string targets the workspace repository.
 type DataSource interface {
-	ListPRs() ([]ghcli.PR, error)
-	ListIssues() ([]ghcli.Issue, error)
-	GetPR(repo string, number int) (ghcli.PR, error)
-	GetIssue(repo string, number int) (ghcli.Issue, error)
+	ListPRs() ([]gh.PR, error)
+	ListIssues() ([]gh.Issue, error)
+	GetPR(repo string, number int) (gh.PR, error)
+	GetIssue(repo string, number int) (gh.Issue, error)
 	RepoName() (string, error)
 	OpenPRWeb(repo string, number int) error
 	OpenIssueWeb(repo string, number int) error
@@ -31,7 +31,7 @@ type DataSource interface {
 	ReopenPR(repo string, number int) error
 	CloseIssue(repo string, number int) error
 	ReopenIssue(repo string, number int) error
-	ListLabels(repo string) ([]ghcli.Label, error)
+	ListLabels(repo string) ([]gh.Label, error)
 	ListAssignees(repo string) ([]string, error)
 	EditPRLabels(repo string, number int, add, remove []string) error
 	EditIssueLabels(repo string, number int, add, remove []string) error
@@ -69,10 +69,10 @@ const (
 )
 
 type (
-	prListMsg           []ghcli.PR
-	issueListMsg        []ghcli.Issue
-	prDetailMsg         ghcli.PR
-	issueDetailMsg      ghcli.Issue
+	prListMsg           []gh.PR
+	issueListMsg        []gh.Issue
+	prDetailMsg         gh.PR
+	issueDetailMsg      gh.Issue
 	repoNameMsg         string
 	errorMsg            struct{ err error }
 	commentPostedMsg    struct{}
@@ -81,7 +81,7 @@ type (
 	stateErrorMsg       struct{ err error }
 	pickerCandidatesMsg struct {
 		kind   pickerKind
-		labels []ghcli.Label
+		labels []gh.Label
 		users  []string
 	}
 	pickerAppliedMsg struct{}
@@ -97,8 +97,8 @@ type Model struct {
 	screen        screen
 	tab           tabID
 	cursors       [2]int
-	prs           []ghcli.PR
-	issues        []ghcli.Issue
+	prs           []gh.PR
+	issues        []gh.Issue
 	loaded        [2]bool
 	listLoading   [2]bool
 	detailLoading bool
@@ -317,7 +317,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.repoName = string(msg)
 		return m, nil
 	case prListMsg:
-		m.prs = []ghcli.PR(msg)
+		m.prs = []gh.PR(msg)
 		m.loaded[tabPRs] = true
 		if m.cursors[tabPRs] >= len(m.prs) {
 			m.cursors[tabPRs] = max(len(m.prs)-1, 0)
@@ -325,7 +325,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.listLoading[tabPRs] = false
 		return m, nil
 	case issueListMsg:
-		m.issues = []ghcli.Issue(msg)
+		m.issues = []gh.Issue(msg)
 		m.loaded[tabIssues] = true
 		if m.cursors[tabIssues] >= len(m.issues) {
 			m.cursors[tabIssues] = max(len(m.issues)-1, 0)
@@ -339,7 +339,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detailLabels = labelNames(msg.Labels)
 		m.detailAssignees = authorLogins(msg.Assignees)
 		m.detailTitle = i18n.Tf("detail.pr_title", map[string]any{"Number": msg.Number, "Title": msg.Title})
-		m.setDetailContent(prMarkdown(ghcli.PR(msg)))
+		m.setDetailContent(prMarkdown(gh.PR(msg)))
 		return m, nil
 	case issueDetailMsg:
 		m.detailLoading = false
@@ -348,7 +348,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detailLabels = labelNames(msg.Labels)
 		m.detailAssignees = authorLogins(msg.Assignees)
 		m.detailTitle = i18n.Tf("detail.issue_title", map[string]any{"Number": msg.Number, "Title": msg.Title})
-		m.setDetailContent(issueMarkdown(ghcli.Issue(msg)))
+		m.setDetailContent(issueMarkdown(gh.Issue(msg)))
 		return m, nil
 	case commentPostedMsg:
 		m.composing = false
@@ -403,7 +403,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case errorMsg:
 		m.screen = screenError
-		if errors.Is(msg.err, ghcli.ErrGhNotFound) {
+		if errors.Is(msg.err, gh.ErrGhNotFound) {
 			m.errText = i18n.T("error.gh_not_found")
 		} else {
 			m.errText = msg.err.Error()
@@ -502,7 +502,7 @@ func (m Model) selectedTarget() (Target, bool) {
 	return Target{Kind: KindIssue, Number: m.issues[m.cursors[tabIssues]].Number}, true
 }
 
-func labelNames(labels []ghcli.Label) []string {
+func labelNames(labels []gh.Label) []string {
 	names := make([]string, len(labels))
 	for i, l := range labels {
 		names[i] = l.Name
@@ -510,7 +510,7 @@ func labelNames(labels []ghcli.Label) []string {
 	return names
 }
 
-func authorLogins(authors []ghcli.Author) []string {
+func authorLogins(authors []gh.Author) []string {
 	logins := make([]string, len(authors))
 	for i, a := range authors {
 		logins[i] = a.Login

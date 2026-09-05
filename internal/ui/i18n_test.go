@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/text/language"
 
-	"github.com/kukv/octoscope/internal/ghcli"
+	"github.com/kukv/octoscope/internal/gh"
 	"github.com/kukv/octoscope/internal/i18n"
 )
 
@@ -68,10 +68,10 @@ func step(m Model, k string) Model {
 func renderEveryScreen() map[string]string {
 	f := &fakeSource{
 		prs:    samplePRs(),
-		issues: []ghcli.Issue{{Number: 3, Title: "an issue"}},
+		issues: []gh.Issue{{Number: 3, Title: "an issue"}},
 		// State must be OPEN or the confirm screen has nothing to offer.
-		pr:     ghcli.PR{Number: 1, Title: "first pr", State: "OPEN"},
-		labels: []ghcli.Label{{Name: "bug", Color: "ff0000"}},
+		pr:     gh.PR{Number: 1, Title: "first pr", State: "OPEN"},
+		labels: []gh.Label{{Name: "bug", Color: "ff0000"}},
 	}
 
 	list := loadedModel(f)

@@ -17,7 +17,6 @@ linters:
         # The GitHub access layer must not know about the UI.
         gh-layer:
           files:
-            - "**/internal/ghcli/**"
             - "**/internal/gh/**"
           deny:
             - pkg: github.com/kukv/octoscope/internal/ui
@@ -29,8 +28,6 @@ linters:
           files:
             - "**/internal/i18n/**"
           deny:
-            - pkg: github.com/kukv/octoscope/internal/ghcli
-              desc: internal/i18n must not depend on other internal packages
             - pkg: github.com/kukv/octoscope/internal/gh
               desc: internal/i18n must not depend on other internal packages
             - pkg: github.com/kukv/octoscope/internal/ui
@@ -48,13 +45,13 @@ linters:
         linters:
           - gosec
       # gosec G204 flags exec.Command whenever its args are not literal
-      # constants. internal/ghcli exists specifically to run "gh" with a
+      # constants. internal/gh/cli exists specifically to run "gh" with a
       # dynamic subcommand and flags built from typed values (see the
       # comment at the call site); there is exactly one call site, and no
       # amount of restructuring removes the "args are a variable" shape the
       # rule matches on. Excluding it here keeps the exception in one place
       # instead of a scattered //nolint.
-      - path: internal/ghcli/ghcli\.go
+      - path: internal/gh/cli/cli\.go
         linters:
           - gosec
         text: "G204"
