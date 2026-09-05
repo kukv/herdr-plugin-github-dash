@@ -1,4 +1,4 @@
-module github.com/kukv/herdr-plugin-github-dash
+module github.com/kukv/octoscope
 
 go 1.27.1
 

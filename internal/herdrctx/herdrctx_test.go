@@ -6,14 +6,14 @@ import (
 )
 
 // 実機検証（2026-07-12, herdr 0.7.1）で取得した実サンプル。
-const realContextJSON = `{"workspace_id":"w4","workspace_label":"herdr-plugin-github-dash","workspace_cwd":"/home/tech/dev/ghq/github.com/kukv/herdr-plugin-github-dash","tab_id":"w4:t1","tab_label":"1","focused_pane_id":"w4:p2","focused_pane_cwd":"/home/tech/dev/ghq/github.com/kukv/herdr-plugin-github-dash","focused_pane_status":"unknown","invocation_source":"cli","correlation_id":"cli:plugin"}`
+const realContextJSON = `{"workspace_id":"w4","workspace_label":"herdr-plugin-github-dash","workspace_cwd":"/home/tech/dev/ghq/github.com/kukv/octoscope","tab_id":"w4:t1","tab_label":"1","focused_pane_id":"w4:p2","focused_pane_cwd":"/home/tech/dev/ghq/github.com/kukv/octoscope","focused_pane_status":"unknown","invocation_source":"cli","correlation_id":"cli:plugin"}`
 
 func TestResolveUsesWorkspaceCwd(t *testing.T) {
 	dir, err := Resolve(realContextJSON)
 	if err != nil {
 		t.Fatalf("Resolve returned error: %v", err)
 	}
-	want := "/home/tech/dev/ghq/github.com/kukv/herdr-plugin-github-dash"
+	want := "/home/tech/dev/ghq/github.com/kukv/octoscope"
 	if dir != want {
 		t.Errorf("dir = %q, want %q", dir, want)
 	}

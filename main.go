@@ -9,9 +9,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/kukv/herdr-plugin-github-dash/internal/ghcli"
-	"github.com/kukv/herdr-plugin-github-dash/internal/herdrctx"
-	"github.com/kukv/herdr-plugin-github-dash/internal/ui"
+	"github.com/kukv/octoscope/internal/ghcli"
+	"github.com/kukv/octoscope/internal/herdrctx"
+	"github.com/kukv/octoscope/internal/ui"
 )
 
 var urlPattern = regexp.MustCompile(

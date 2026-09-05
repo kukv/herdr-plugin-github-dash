@@ -7,7 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/kukv/herdr-plugin-github-dash/internal/ghcli"
+	"github.com/kukv/octoscope/internal/ghcli"
 )
 
 var (

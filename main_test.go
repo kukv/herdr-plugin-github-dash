@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/kukv/herdr-plugin-github-dash/internal/ui"
+	"github.com/kukv/octoscope/internal/ui"
 )
 
 func TestParseTarget(t *testing.T) {

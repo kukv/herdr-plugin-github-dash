@@ -9,7 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/kukv/herdr-plugin-github-dash/internal/ghcli"
+	"github.com/kukv/octoscope/internal/ghcli"
 )
 
 // fakeSource implements DataSource and records calls.

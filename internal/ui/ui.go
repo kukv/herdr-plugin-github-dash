@@ -11,7 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
 
-	"github.com/kukv/herdr-plugin-github-dash/internal/ghcli"
+	"github.com/kukv/octoscope/internal/ghcli"
 )
 
 // DataSource is what the UI needs from the GitHub layer.
