@@ -54,6 +54,7 @@ internal/gh/          GitHub アクセスの抽象（interface とドメイン�
   ├ cli/              gh CLI バックエンド（既存 internal/ghcli を移設）
   └ api/              go-github + githubv4 バックエンド（Phase 4）
 internal/config/      設定ファイルの読み込み
+internal/i18n/        メッセージカタログ（en / ja、go:embed）
 internal/tui/         Bubble Tea モデル群
   ├ app/              ルートモデル、タブ切替、共通キーマップ
   ├ work/             「自分に関係する仕事」ビュー
@@ -196,8 +197,69 @@ Linux（`~/.config`）で自然な場所に収まる。
 | `saved_queries` | Search タブで保存したクエリ（名前とクエリ文字列） |
 | `default_tab` | 起動時に開くタブ |
 | `nerd_font` | Nerd Font グリフの使用可否の明示指定（既定は自動判定） |
+| `language` | 表示言語（`en` / `ja`、既定は自動判定） |
 
-## 6. フェーズ分割
+## 6. 多言語対応
+
+英語と日本語に対応する。既定は英語とし、日本語は環境または設定から選ばれたときに使う。
+
+### 6.1 翻訳の対象と対象外
+
+翻訳するのは**このツール自身が書く文字列**に限る。
+
+| 対象 | 例 |
+|---|---|
+| ラベル・見出し | `Review requested` / `レビュー依頼` |
+| キーバインドの説明 | `move` / `移動` |
+| 状態語 | `draft`、`approved`、`running` |
+| エラーメッセージ | `gh CLI not found...` |
+| 相対時刻 | `2h ago` / `2 時間前` |
+| 日時 | ロケールに応じた書式 |
+
+翻訳しないもの:
+
+- GitHub から取得した内容（タイトル、本文、コメント、ラベル名、ユーザー名、
+  ブランチ名、checks のジョブ名）
+- GitHub の検索構文（`is:open`、`label:` など）。Search タブのクエリビルダーでは、
+  **項目名は翻訳するが、生成されるクエリ文字列は翻訳しない**
+
+### 6.2 実装方針
+
+- カタログは `nicksnyder/go-i18n/v2` を使い、`internal/i18n` に置く
+- 翻訳ファイルは TOML（`active.en.toml`、`active.ja.toml`）とし、`go:embed` で
+  バイナリに埋め込む。3 OS でファイル配置を気にしなくて済む
+- コード側はメッセージ ID で参照する（`i18n.T("work.review_requested")`）。
+  日本語・英語のどちらもハードコードしない
+- 複数形は go-i18n の plural 機能に任せる。日本語には複数形が無いため
+  `other` のみを定義する
+
+### 6.3 言語の決定順
+
+1. `--lang en` / `--lang ja` フラグ
+2. 設定ファイルの `language`
+3. OS のロケール。Unix 系は `LC_ALL` → `LC_MESSAGES` → `LANG`、
+   Windows はユーザー既定ロケールを参照する（`jeandeaual/go-locale` を使う。
+   Windows では `LANG` が未設定なのが通常のため、環境変数だけでは判定できない）
+4. 上記で決まらなければ英語
+
+### 6.4 表示上の注意
+
+日本語は多くが全角で、ターミナル上では 1 文字 2 桁を占める。
+既存コードは `github.com/charmbracelet/x/ansi` で表示幅を計算しており、
+この方針を全ビューで守る。`len()` や `utf8.RuneCountInString()` で
+桁を数える実装を混入させない。特に次の箇所で桁ずれが出やすい。
+
+- Repos タブ・Search タブの桁揃えテーブル
+- Work タブのカンバンのカード（1 列あたり 30 桁前後しかない）
+- キーバインドを並べるフッター
+
+### 6.5 テスト
+
+各ビューの golden test を `en` と `ja` の両方で回し、
+桁揃えが崩れないことを検証する。翻訳漏れ（カタログに無い ID）は
+テストで検出できるようにする。
+
+## 7. フェーズ分割
 
 各フェーズが単独で「動いて使える」状態になるように切る。
 フェーズごとに spec → 実装計画 → 実装のサイクルを回す。
@@ -205,18 +267,21 @@ Linux（`~/.config`）で自然な場所に収まる。
 ### Phase 0: スタンドアローン化とリネーム
 
 - GitHub 上でリポジトリ名を `octoscope` に変更（旧 URL はリダイレクトされる）
-- `structure` リポジトリ側の Terraform を追従させる（別 PR、詳細は §8）
+- `structure` リポジトリ側の Terraform を追従させる（別 PR、詳細は §9）
 - `go.mod` を `github.com/kukv/octoscope` に変更し、全 import を更新
 - Herdr 資産の削除: `internal/herdrctx`、`herdr-plugin.toml`、`open.sh`、`run.sh`、
   および `GITHUB_DASH_URL` によるリンクハンドラ経路
 - `main.go` を `cmd/octoscope/main.go` へ移動
 - `--repo` フラグと cwd の git remote による対象リポジトリ解決を実装
+- `internal/i18n` の土台を作り、既存の全文字列をカタログへ移す（§6）。
+  以降のフェーズでは、文字列を足すときに必ず両言語のカタログへ足す
 - GoReleaser 設定とリリースワークフローを追加（GitHub Actions は
   full-length commit SHA でピンする org ポリシーに従う）
 - README を全面的に書き換える
 
 **検証**: `GOOS=windows/darwin/linux` のクロスコンパイルが通ること。
 `octoscope --repo kukv/octoscope` で既存の PR/Issue ビューが従来どおり動くこと。
+`--lang ja` と `--lang en` の両方で golden test が通ること。
 
 ### Phase 1: Work タブと GraphQL バックエンド
 
@@ -253,16 +318,16 @@ API フォールバックを最後に置いたのは、バックエンドを 2 �
 並走させると Phase 0〜3 のすべてで二重実装の負担が生じるためである。
 Phase 0〜3 は `gh` を前提に進め、interface の境界だけを先に確定させておく。
 
-## 7. テスト方針
+## 8. テスト方針
 
 既存の `runFunc` 差し替えによるテストパターンを踏襲する。
 
 - `internal/gh` はテスト用の fake 実装を持ち、上位層はそれに対してテストする
 - TUI は `tea.Model` の `Update` / `View` を golden test で検証する
-  （既存の `internal/ui/ui_test.go` と同じ形）
+  （既存の `internal/ui/ui_test.go` と同じ形）。golden は `en` / `ja` の両方で持つ
 - ネットワークを実際に叩くテストは書かない
 
-## 8. リネーム作業の注意点
+## 9. リネーム作業の注意点
 
 `structure` リポジトリの `terraform/repository_herdr-plugin-github-dash.tf` は
 モジュールラベル `repository_herdr_plugin_github_dash` でリソースを管理している。
@@ -278,7 +343,7 @@ Terraform はリポジトリの destroy / recreate を計画してしまう。
 
 この作業は `structure` リポジトリ側の独立した PR として行う。
 
-## 9. 廃止するもの
+## 10. 廃止するもの
 
 | 対象 | 理由 |
 |---|---|
