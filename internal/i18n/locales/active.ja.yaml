@@ -105,3 +105,6 @@ time:
     other: "{{.Count}} 時間前"
   days_ago:
     other: "{{.Count}} 日前"
+  # A Go reference-time layout, not a display string.
+  datetime_layout:
+    other: "2006年1月2日 15:04"

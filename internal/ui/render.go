@@ -228,7 +228,7 @@ func writeCommonMeta(b *strings.Builder, labels []ghcli.Label, updatedAt time.Ti
 		}
 		fmt.Fprintf(b, "- **%s**: %s\n", i18n.T("md.labels"), strings.Join(names, ", "))
 	}
-	fmt.Fprintf(b, "- **%s**: %s\n", i18n.T("md.updated"), updatedAt.Format("2006-01-02 15:04"))
+	fmt.Fprintf(b, "- **%s**: %s\n", i18n.T("md.updated"), i18n.DateTime(updatedAt))
 }
 
 func writeBody(b *strings.Builder, body string) {
@@ -243,6 +243,6 @@ func writeBody(b *strings.Builder, body string) {
 func writeComments(b *strings.Builder, comments []ghcli.Comment) {
 	for _, c := range comments {
 		fmt.Fprintf(b, "\n\n---\n\n**@%s** — %s\n\n%s",
-			c.Author.Login, c.CreatedAt.Format("2006-01-02 15:04"), c.Body)
+			c.Author.Login, i18n.DateTime(c.CreatedAt), c.Body)
 	}
 }
