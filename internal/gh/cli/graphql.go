@@ -104,6 +104,9 @@ type checkNode struct {
 
 // ListWork fetches every column of the Work board in one GraphQL request.
 func (c *Client) ListWork(ctx context.Context) (gh.Work, error) {
+	// gh api graphql exits non-zero when the response body carries a top-level
+	// "errors" array, so a query GitHub rejects arrives here as an error from
+	// c.run rather than as a body we'd otherwise parse into empty columns.
 	out, err := c.run(ctx, c.dir, "api", "graphql", "-f", "query="+workQuery())
 	if err != nil {
 		return gh.Work{}, err

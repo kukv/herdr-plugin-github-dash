@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -113,6 +114,87 @@ func TestListWorkReportsAFailure(t *testing.T) {
 
 	if _, err := c.ListWork(context.Background()); err == nil {
 		t.Error("ListWork accepted a body that is not JSON")
+	}
+}
+
+func TestListWorkPropagatesRunError(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("gh api: HTTP 502")
+	c := New("/tmp", "")
+	c.run = func(context.Context, string, ...string) ([]byte, error) {
+		return nil, wantErr
+	}
+
+	w, err := c.ListWork(context.Background())
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("err = %v, want %v", err, wantErr)
+	}
+	for _, s := range gh.WorkSections() {
+		if n := len(w[s]); n != 0 {
+			t.Errorf("section %v holds %d items, want 0", s, n)
+		}
+	}
+}
+
+func TestChecksNoCommitsYieldsCheckNone(t *testing.T) {
+	t.Parallel()
+
+	const noRollupJSON = `{"data":{
+	  "reviewRequested":{"nodes":[
+	    {"__typename":"PullRequest","number":1,"title":"no checks yet",
+	     "url":"https://github.com/kukv/octoscope/pull/1","isDraft":false,
+	     "updatedAt":"2026-09-06T12:00:00Z","reviewDecision":"",
+	     "author":{"login":"someone"},
+	     "repository":{"nameWithOwner":"kukv/octoscope"},
+	     "commits":{"nodes":[{"commit":{"statusCheckRollup":null}}]}}
+	  ]},
+	  "yourPRs":{"nodes":[]},
+	  "assigned":{"nodes":[]},
+	  "mentioned":{"nodes":[]}
+	}}`
+
+	c := New("/tmp", "")
+	c.run = func(context.Context, string, ...string) ([]byte, error) {
+		return []byte(noRollupJSON), nil
+	}
+
+	w, err := c.ListWork(context.Background())
+	if err != nil {
+		t.Fatalf("ListWork: %v", err)
+	}
+	rr := w[gh.SectionReviewRequested]
+	if len(rr) != 1 {
+		t.Fatalf("review requested holds %d items, want 1", len(rr))
+	}
+	if got := rr[0].Checks; got != (gh.Checks{State: gh.CheckNone}) {
+		t.Errorf("checks = %+v, want zero counts with CheckNone", got)
+	}
+}
+
+func TestCheckOutcome(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		node checkNode
+		want gh.CheckState
+	}{
+		{"CheckRun success", checkNode{Typename: "CheckRun", Status: "COMPLETED", Conclusion: "SUCCESS"}, gh.CheckSuccess},
+		{"CheckRun failure", checkNode{Typename: "CheckRun", Status: "COMPLETED", Conclusion: "FAILURE"}, gh.CheckFailure},
+		{"CheckRun in progress", checkNode{Typename: "CheckRun", Status: "IN_PROGRESS"}, gh.CheckRunning},
+		{"StatusContext success", checkNode{Typename: "StatusContext", State: "SUCCESS"}, gh.CheckSuccess},
+		{"StatusContext failure", checkNode{Typename: "StatusContext", State: "FAILURE"}, gh.CheckFailure},
+		{"StatusContext error", checkNode{Typename: "StatusContext", State: "ERROR"}, gh.CheckFailure},
+		{"StatusContext pending", checkNode{Typename: "StatusContext", State: "PENDING"}, gh.CheckPending},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := checkOutcome(tt.node); got != tt.want {
+				t.Errorf("checkOutcome(%+v) = %v, want %v", tt.node, got, tt.want)
+			}
+		})
 	}
 }
 
