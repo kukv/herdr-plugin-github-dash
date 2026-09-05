@@ -14,6 +14,14 @@ error:
   gh_not_found:
     other: "gh CLI not found; install it and run: gh auth login"
 
+tab:
+  # Tab names double as the labels for the 1 / 2 keys, so they stay the same
+  # in both languages (see spec section 6.1).
+  work:
+    other: "Work"
+  repos:
+    other: "Repos"
+
 list:
   tab_prs:
     other: "Pull Requests"

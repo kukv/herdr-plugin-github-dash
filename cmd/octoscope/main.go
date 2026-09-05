@@ -2,9 +2,11 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/jeandeaual/go-locale"
 
@@ -12,14 +14,17 @@ import (
 
 	"github.com/kukv/octoscope/internal/gh/cli"
 	"github.com/kukv/octoscope/internal/i18n"
-	"github.com/kukv/octoscope/internal/ui"
+	"github.com/kukv/octoscope/internal/tui/app"
 )
 
 // version is set by GoReleaser via -ldflags at release build time.
 var version = "dev"
 
+// repoLookupTimeout bounds the one gh call main makes before the UI starts.
+const repoLookupTimeout = 5 * time.Second
+
 func main() {
-	repo := flag.String("repo", "",
+	repoFlag := flag.String("repo", "",
 		"target repository as owner/name; defaults to the repository of the current directory")
 	lang := flag.String("lang", "",
 		"display language: en or ja; defaults to the operating system locale")
@@ -39,9 +44,26 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	p := tea.NewProgram(ui.New(cli.New(dir, *repo)))
+
+	client := cli.New(dir, *repoFlag)
+	p := tea.NewProgram(app.New(client, app.Options{
+		HasRepo: hasRepo(client, *repoFlag),
+	}))
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// hasRepo reports whether a target repository is known. An explicit --repo
+// settles it; otherwise we ask gh, which resolves the git remote of the
+// working directory and fails when there is none.
+func hasRepo(c *cli.Client, flagRepo string) bool {
+	if flagRepo != "" {
+		return true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), repoLookupTimeout)
+	defer cancel()
+	_, err := c.RepoName(ctx)
+	return err == nil
 }
