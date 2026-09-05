@@ -28,9 +28,16 @@ linters:
         i18n-layer:
           files:
             - "**/internal/i18n/**"
-            - "!$test"
           deny:
-            - pkg: github.com/kukv/octoscope/internal
+            - pkg: github.com/kukv/octoscope/internal/ghcli
+              desc: internal/i18n must not depend on other internal packages
+            - pkg: github.com/kukv/octoscope/internal/gh
+              desc: internal/i18n must not depend on other internal packages
+            - pkg: github.com/kukv/octoscope/internal/ui
+              desc: internal/i18n must not depend on other internal packages
+            - pkg: github.com/kukv/octoscope/internal/tui
+              desc: internal/i18n must not depend on other internal packages
+            - pkg: github.com/kukv/octoscope/internal/config
               desc: internal/i18n must not depend on other internal packages
   exclusions:
     rules:
