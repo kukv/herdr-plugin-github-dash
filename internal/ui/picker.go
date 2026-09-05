@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+
+	"github.com/kukv/octoscope/internal/i18n"
 )
 
 type pickerKind int
@@ -97,7 +99,7 @@ func (p picker) listView(height int) string {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render(p.title) + "\n\n")
 	if len(p.items) == 0 {
-		b.WriteString(dimStyle.Render("(no candidates)") + "\n")
+		b.WriteString(dimStyle.Render(i18n.T("picker.no_candidates")) + "\n")
 	}
 	visible := visibleRows(height)
 	end := p.offset + visible
@@ -117,7 +119,7 @@ func (p picker) listView(height int) string {
 		b.WriteString(cursorPrefix(i == p.cursor) + box + " " + name + "\n")
 	}
 	if p.err != "" {
-		b.WriteString("\nerror: " + p.err + "\n")
+		b.WriteString("\n" + i18n.T("common.error_prefix") + p.err + "\n")
 	}
 	return b.String()
 }

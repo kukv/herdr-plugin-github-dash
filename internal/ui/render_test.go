@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/herdr-plugin-github-dash/internal/ghcli"
+	"github.com/kukv/octoscope/internal/ghcli"
 )
 
 func TestRelTime(t *testing.T) {

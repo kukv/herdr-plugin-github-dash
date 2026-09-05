@@ -66,14 +66,25 @@ type Issue struct {
 
 type runFunc func(dir string, args ...string) ([]byte, error)
 
-// Client runs gh commands in a fixed directory.
+// Client runs gh commands in a fixed directory, against a fixed repository.
 type Client struct {
-	dir string
-	run runFunc
+	dir  string
+	repo string
+	run  runFunc
 }
 
-func New(dir string) *Client {
-	return &Client{dir: dir, run: runGh}
+// New returns a client for the repository named by repo ("owner/name").
+// An empty repo falls back to the repository of the git remote in dir.
+func New(dir, repo string) *Client {
+	return &Client{dir: dir, repo: repo, run: runGh}
+}
+
+// effectiveRepo picks the per-call repository if given, else the client's.
+func (c *Client) effectiveRepo(repo string) string {
+	if repo != "" {
+		return repo
+	}
+	return c.repo
 }
 
 func runGh(dir string, args ...string) ([]byte, error) {
@@ -82,7 +93,7 @@ func runGh(dir string, args ...string) ([]byte, error) {
 	}
 	// gh subcommand args are built internally from typed values (subcommand,
 	// numbers, flags), never from untrusted external input.
-	cmd := exec.Command("gh", args...) //nolint:gosec // G204: args are internally constructed, not attacker-controlled
+	cmd := exec.Command("gh", args...)
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -104,7 +115,8 @@ func appendRepo(args []string, repo string) []string {
 }
 
 func (c *Client) ListPRs() ([]PR, error) {
-	out, err := c.run(c.dir, "pr", "list", "--json", prListFields)
+	args := appendRepo([]string{"pr", "list", "--json", prListFields}, c.repo)
+	out, err := c.run(c.dir, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +128,8 @@ func (c *Client) ListPRs() ([]PR, error) {
 }
 
 func (c *Client) ListIssues() ([]Issue, error) {
-	out, err := c.run(c.dir, "issue", "list", "--json", issueListFields)
+	args := appendRepo([]string{"issue", "list", "--json", issueListFields}, c.repo)
+	out, err := c.run(c.dir, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +141,7 @@ func (c *Client) ListIssues() ([]Issue, error) {
 }
 
 func (c *Client) GetPR(repo string, number int) (PR, error) {
-	args := appendRepo([]string{"pr", "view", strconv.Itoa(number), "--json", prViewFields}, repo)
+	args := appendRepo([]string{"pr", "view", strconv.Itoa(number), "--json", prViewFields}, c.effectiveRepo(repo))
 	out, err := c.run(c.dir, args...)
 	if err != nil {
 		return PR{}, err
@@ -141,7 +154,7 @@ func (c *Client) GetPR(repo string, number int) (PR, error) {
 }
 
 func (c *Client) GetIssue(repo string, number int) (Issue, error) {
-	args := appendRepo([]string{"issue", "view", strconv.Itoa(number), "--json", issueViewFields}, repo)
+	args := appendRepo([]string{"issue", "view", strconv.Itoa(number), "--json", issueViewFields}, c.effectiveRepo(repo))
 	out, err := c.run(c.dir, args...)
 	if err != nil {
 		return Issue{}, err
@@ -154,7 +167,12 @@ func (c *Client) GetIssue(repo string, number int) (Issue, error) {
 }
 
 func (c *Client) RepoName() (string, error) {
-	out, err := c.run(c.dir, "repo", "view", "--json", "nameWithOwner")
+	args := []string{"repo", "view"}
+	if c.repo != "" {
+		args = append(args, c.repo)
+	}
+	args = append(args, "--json", "nameWithOwner")
+	out, err := c.run(c.dir, args...)
 	if err != nil {
 		return "", err
 	}
@@ -168,47 +186,47 @@ func (c *Client) RepoName() (string, error) {
 }
 
 func (c *Client) OpenPRWeb(repo string, number int) error {
-	_, err := c.run(c.dir, appendRepo([]string{"pr", "view", strconv.Itoa(number), "--web"}, repo)...)
+	_, err := c.run(c.dir, appendRepo([]string{"pr", "view", strconv.Itoa(number), "--web"}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) OpenIssueWeb(repo string, number int) error {
-	_, err := c.run(c.dir, appendRepo([]string{"issue", "view", strconv.Itoa(number), "--web"}, repo)...)
+	_, err := c.run(c.dir, appendRepo([]string{"issue", "view", strconv.Itoa(number), "--web"}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) AddPRComment(repo string, number int, body string) error {
-	_, err := c.run(c.dir, appendRepo([]string{"pr", "comment", strconv.Itoa(number), "--body", body}, repo)...)
+	_, err := c.run(c.dir, appendRepo([]string{"pr", "comment", strconv.Itoa(number), "--body", body}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) AddIssueComment(repo string, number int, body string) error {
-	_, err := c.run(c.dir, appendRepo([]string{"issue", "comment", strconv.Itoa(number), "--body", body}, repo)...)
+	_, err := c.run(c.dir, appendRepo([]string{"issue", "comment", strconv.Itoa(number), "--body", body}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) ClosePR(repo string, number int) error {
-	_, err := c.run(c.dir, appendRepo([]string{"pr", "close", strconv.Itoa(number)}, repo)...)
+	_, err := c.run(c.dir, appendRepo([]string{"pr", "close", strconv.Itoa(number)}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) ReopenPR(repo string, number int) error {
-	_, err := c.run(c.dir, appendRepo([]string{"pr", "reopen", strconv.Itoa(number)}, repo)...)
+	_, err := c.run(c.dir, appendRepo([]string{"pr", "reopen", strconv.Itoa(number)}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) CloseIssue(repo string, number int) error {
-	_, err := c.run(c.dir, appendRepo([]string{"issue", "close", strconv.Itoa(number)}, repo)...)
+	_, err := c.run(c.dir, appendRepo([]string{"issue", "close", strconv.Itoa(number)}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) ReopenIssue(repo string, number int) error {
-	_, err := c.run(c.dir, appendRepo([]string{"issue", "reopen", strconv.Itoa(number)}, repo)...)
+	_, err := c.run(c.dir, appendRepo([]string{"issue", "reopen", strconv.Itoa(number)}, c.effectiveRepo(repo))...)
 	return err
 }
 
 func (c *Client) ListLabels(repo string) ([]Label, error) {
-	args := appendRepo([]string{"label", "list", "--json", "name,color", "--limit", "100"}, repo)
+	args := appendRepo([]string{"label", "list", "--json", "name,color", "--limit", "100"}, c.effectiveRepo(repo))
 	out, err := c.run(c.dir, args...)
 	if err != nil {
 		return nil, err
@@ -225,8 +243,8 @@ func (c *Client) ListLabels(repo string) ([]Label, error) {
 // override we build the explicit path (gh api takes no --repo).
 func (c *Client) ListAssignees(repo string) ([]string, error) {
 	path := "repos/{owner}/{repo}/assignees?per_page=100"
-	if repo != "" {
-		path = "repos/" + repo + "/assignees?per_page=100"
+	if r := c.effectiveRepo(repo); r != "" {
+		path = "repos/" + r + "/assignees?per_page=100"
 	}
 	out, err := c.run(c.dir, "api", path)
 	if err != nil {
@@ -251,7 +269,7 @@ func (c *Client) editItems(kindCmd, repo string, number int, add, remove []strin
 	for _, v := range remove {
 		args = append(args, removeFlag, v)
 	}
-	_, err := c.run(c.dir, appendRepo(args, repo)...)
+	_, err := c.run(c.dir, appendRepo(args, c.effectiveRepo(repo))...)
 	return err
 }
 

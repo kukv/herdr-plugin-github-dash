@@ -1,0 +1,110 @@
+app:
+  name:
+    other: "octoscope"
+  error_title:
+    other: "octoscope — error"
+
+common:
+  loading:
+    other: "loading..."
+  error_prefix:
+    other: "error: "
+
+error:
+  gh_not_found:
+    other: "gh CLI not found; install it and run: gh auth login"
+
+list:
+  tab_prs:
+    other: "Pull Requests"
+  tab_issues:
+    other: "Issues"
+  no_open_prs:
+    other: "No open pull requests"
+  no_open_issues:
+    other: "No open issues"
+
+detail:
+  pr_title:
+    other: "PR #{{.Number}} {{.Title}}"
+  issue_title:
+    other: "Issue #{{.Number}} {{.Title}}"
+
+compose:
+  title:
+    other: "Comment on {{.Title}}"
+  placeholder:
+    other: "Leave a comment..."
+  posting:
+    other: "posting..."
+
+picker:
+  labels:
+    other: "Labels"
+  assignees:
+    other: "Assignees"
+  applying:
+    other: "applying..."
+  no_candidates:
+    other: "(no candidates)"
+
+confirm:
+  close_pr:
+    other: "Close this PR? "
+  reopen_pr:
+    other: "Reopen this PR? "
+  close_issue:
+    other: "Close this issue? "
+  reopen_issue:
+    other: "Reopen this issue? "
+  yes_no:
+    other: "(y/n)"
+  working:
+    other: "working..."
+
+footer:
+  list:
+    other: "j/k:move  enter:detail  tab:PR/Issue  r:refresh  o:browser  q:quit"
+  detail_prefix:
+    other: "j/k:scroll  r:refresh  o:browser  c:comment  "
+  detail_suffix:
+    other: "l:labels  a:assign  esc:back"
+  close:
+    other: "x:close  "
+  reopen:
+    other: "x:reopen  "
+  picker:
+    other: "space:toggle  enter:apply  esc:cancel"
+  compose:
+    other: "ctrl+s:send  esc:cancel"
+  error:
+    other: "q:quit"
+
+md:
+  author:
+    other: "author"
+  state:
+    other: "state"
+  review:
+    other: "review"
+  labels:
+    other: "labels"
+  updated:
+    other: "updated"
+  draft_suffix:
+    other: " (draft)"
+  no_description:
+    other: "_no description_"
+
+time:
+  now:
+    other: "now"
+  minutes_ago:
+    one: "{{.Count}}m ago"
+    other: "{{.Count}}m ago"
+  hours_ago:
+    one: "{{.Count}}h ago"
+    other: "{{.Count}}h ago"
+  days_ago:
+    one: "{{.Count}}d ago"
+    other: "{{.Count}}d ago"

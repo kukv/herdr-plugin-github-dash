@@ -3,6 +3,7 @@ package ghcli
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -317,5 +318,68 @@ func TestEditItemsError(t *testing.T) {
 	c, _ := newTestClient("", wantErr)
 	if err := c.EditPRLabels("", 12, []string{"bug"}, nil); !errors.Is(err, wantErr) {
 		t.Errorf("err = %v, want %v", err, wantErr)
+	}
+}
+
+func TestClientUsesDefaultRepo(t *testing.T) {
+	var got []string
+	c := New("/tmp", "kukv/octoscope")
+	c.run = func(_ string, args ...string) ([]byte, error) {
+		got = args
+		return []byte("[]"), nil
+	}
+	if _, err := c.ListPRs(); err != nil {
+		t.Fatalf("ListPRs: %v", err)
+	}
+	want := []string{"pr", "list", "--json", prListFields, "--repo", "kukv/octoscope"}
+	if !slices.Equal(got, want) {
+		t.Errorf("args = %v, want %v", got, want)
+	}
+}
+
+func TestPerCallRepoOverridesDefault(t *testing.T) {
+	var got []string
+	c := New("/tmp", "kukv/octoscope")
+	c.run = func(_ string, args ...string) ([]byte, error) {
+		got = args
+		return []byte("{}"), nil
+	}
+	if _, err := c.GetPR("herdr/herdr", 7); err != nil {
+		t.Fatalf("GetPR: %v", err)
+	}
+	if !slices.Contains(got, "herdr/herdr") || slices.Contains(got, "kukv/octoscope") {
+		t.Errorf("args = %v, want the per-call repo to win", got)
+	}
+}
+
+func TestRepoNameUsesPositionalArgument(t *testing.T) {
+	var got []string
+	c := New("/tmp", "kukv/octoscope")
+	c.run = func(_ string, args ...string) ([]byte, error) {
+		got = args
+		return []byte(`{"nameWithOwner":"kukv/octoscope"}`), nil
+	}
+	if _, err := c.RepoName(); err != nil {
+		t.Fatalf("RepoName: %v", err)
+	}
+	want := []string{"repo", "view", "kukv/octoscope", "--json", "nameWithOwner"}
+	if !slices.Equal(got, want) {
+		t.Errorf("args = %v, want %v", got, want)
+	}
+}
+
+func TestListAssigneesBuildsAPIPathFromDefaultRepo(t *testing.T) {
+	var got []string
+	c := New("/tmp", "kukv/octoscope")
+	c.run = func(_ string, args ...string) ([]byte, error) {
+		got = args
+		return []byte("[]"), nil
+	}
+	if _, err := c.ListAssignees(""); err != nil {
+		t.Fatalf("ListAssignees: %v", err)
+	}
+	want := []string{"api", "repos/kukv/octoscope/assignees?per_page=100"}
+	if !slices.Equal(got, want) {
+		t.Errorf("args = %v, want %v", got, want)
 	}
 }

@@ -29,7 +29,15 @@ linters:
           files:
             - "**/internal/i18n/**"
           deny:
-            - pkg: github.com/kukv/octoscope/internal
+            - pkg: github.com/kukv/octoscope/internal/ghcli
+              desc: internal/i18n must not depend on other internal packages
+            - pkg: github.com/kukv/octoscope/internal/gh
+              desc: internal/i18n must not depend on other internal packages
+            - pkg: github.com/kukv/octoscope/internal/ui
+              desc: internal/i18n must not depend on other internal packages
+            - pkg: github.com/kukv/octoscope/internal/tui
+              desc: internal/i18n must not depend on other internal packages
+            - pkg: github.com/kukv/octoscope/internal/config
               desc: internal/i18n must not depend on other internal packages
   exclusions:
     rules:
@@ -39,6 +47,17 @@ linters:
       - path: _test\.go
         linters:
           - gosec
+      # gosec G204 flags exec.Command whenever its args are not literal
+      # constants. internal/ghcli exists specifically to run "gh" with a
+      # dynamic subcommand and flags built from typed values (see the
+      # comment at the call site); there is exactly one call site, and no
+      # amount of restructuring removes the "args are a variable" shape the
+      # rule matches on. Excluding it here keeps the exception in one place
+      # instead of a scattered //nolint.
+      - path: internal/ghcli/ghcli\.go
+        linters:
+          - gosec
+        text: "G204"
 
 issues:
   max-issues-per-linter: 0

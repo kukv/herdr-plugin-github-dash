@@ -7,7 +7,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/kukv/herdr-plugin-github-dash/internal/ghcli"
+	"github.com/kukv/octoscope/internal/ghcli"
+	"github.com/kukv/octoscope/internal/i18n"
 )
 
 var (
@@ -18,13 +19,13 @@ var (
 
 func (m Model) listView() string {
 	var b strings.Builder
-	title := "GitHub Dash"
+	title := i18n.T("app.name")
 	if m.repoName != "" {
 		title += " — " + m.repoName
 	}
 	b.WriteString(titleStyle.Render(title) + "\n\n")
 
-	prTab, issueTab := "Pull Requests", "Issues"
+	prTab, issueTab := i18n.T("list.tab_prs"), i18n.T("list.tab_issues")
 	if m.tab == tabPRs {
 		prTab = activeTabStyle.Render(prTab)
 		issueTab = dimStyle.Render(issueTab)
@@ -36,11 +37,11 @@ func (m Model) listView() string {
 
 	switch {
 	case m.listLoading[m.tab]:
-		b.WriteString(m.spin.View() + " loading...\n")
+		b.WriteString(m.spin.View() + " " + i18n.T("common.loading") + "\n")
 	case m.tab == tabPRs && len(m.prs) == 0:
-		b.WriteString(dimStyle.Render("No open pull requests") + "\n")
+		b.WriteString(dimStyle.Render(i18n.T("list.no_open_prs")) + "\n")
 	case m.tab == tabIssues && len(m.issues) == 0:
-		b.WriteString(dimStyle.Render("No open issues") + "\n")
+		b.WriteString(dimStyle.Render(i18n.T("list.no_open_issues")) + "\n")
 	case m.tab == tabPRs:
 		now := time.Now()
 		for i, pr := range m.prs {
@@ -53,7 +54,7 @@ func (m Model) listView() string {
 		}
 	}
 
-	b.WriteString("\n" + dimStyle.Render("j/k:move  enter:detail  tab:PR/Issue  r:refresh  o:browser  q:quit"))
+	b.WriteString("\n" + dimStyle.Render(i18n.T("footer.list")))
 	return b.String()
 }
 
@@ -68,13 +69,13 @@ func (m Model) detailView() string {
 		return m.pickerView()
 	}
 	if m.detailLoading || m.pickerLoading {
-		return m.spin.View() + " loading...\n"
+		return m.spin.View() + " " + i18n.T("common.loading") + "\n"
 	}
 	header := titleStyle.Render(m.detailTitle)
-	footer := dimStyle.Render("j/k:scroll  r:refresh  o:browser  c:comment  " + m.stateFooterKey() + "l:labels  a:assign  esc:back")
+	footer := dimStyle.Render(i18n.T("footer.detail_prefix") + m.stateFooterKey() + i18n.T("footer.detail_suffix"))
 	body := header + "\n" + m.detail.View() + "\n"
 	if m.actionErr != "" {
-		body += "error: " + m.actionErr + "\n"
+		body += i18n.T("common.error_prefix") + m.actionErr + "\n"
 	}
 	return body + footer
 }
@@ -82,9 +83,9 @@ func (m Model) detailView() string {
 func (m Model) pickerView() string {
 	body := m.picker.listView(m.height)
 	if m.applying {
-		return body + "\n" + m.spin.View() + " applying...\n"
+		return body + "\n" + m.spin.View() + " " + i18n.T("picker.applying") + "\n"
 	}
-	return body + "\n" + dimStyle.Render("space:toggle  enter:apply  esc:cancel")
+	return body + "\n" + dimStyle.Render(i18n.T("footer.picker"))
 }
 
 // stateFooterKey returns the state-aware footer hint (with trailing spaces),
@@ -95,51 +96,54 @@ func (m Model) stateFooterKey() string {
 		return ""
 	}
 	if closing {
-		return "x:close  "
+		return i18n.T("footer.close")
 	}
-	return "x:reopen  "
+	return i18n.T("footer.reopen")
 }
 
 func (m Model) confirmView() string {
 	header := titleStyle.Render(m.detailTitle)
 	closing, _ := m.stateAction()
-	verb := "Reopen"
-	if closing {
-		verb = "Close"
-	}
-	noun := "issue"
-	if m.detailTarget.Kind == KindPR {
-		noun = "PR"
+	var id string
+	switch {
+	case m.detailTarget.Kind == KindPR && closing:
+		id = "confirm.close_pr"
+	case m.detailTarget.Kind == KindPR:
+		id = "confirm.reopen_pr"
+	case closing:
+		id = "confirm.close_issue"
+	default:
+		id = "confirm.reopen_issue"
 	}
 	var b strings.Builder
 	b.WriteString(header + "\n\n")
-	fmt.Fprintf(&b, "%s this %s? ", verb, noun)
+	b.WriteString(i18n.T(id))
 	if m.working {
-		b.WriteString(m.spin.View() + " working...\n")
+		b.WriteString(m.spin.View() + " " + i18n.T("confirm.working") + "\n")
 	} else {
-		b.WriteString(dimStyle.Render("(y/n)"))
+		b.WriteString(dimStyle.Render(i18n.T("confirm.yes_no")))
 	}
 	return b.String()
 }
 
 func (m Model) composeView() string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Comment on "+m.detailTitle) + "\n\n")
+	b.WriteString(titleStyle.Render(i18n.Tf("compose.title", map[string]any{"Title": m.detailTitle})) + "\n\n")
 	b.WriteString(m.textarea.View() + "\n\n")
 	if m.postErr != "" {
-		b.WriteString("error: " + m.postErr + "\n\n")
+		b.WriteString(i18n.T("common.error_prefix") + m.postErr + "\n\n")
 	}
 	if m.posting {
-		b.WriteString(m.spin.View() + " posting...\n")
+		b.WriteString(m.spin.View() + " " + i18n.T("compose.posting") + "\n")
 	} else {
-		b.WriteString(dimStyle.Render("ctrl+s:send  esc:cancel"))
+		b.WriteString(dimStyle.Render(i18n.T("footer.compose")))
 	}
 	return b.String()
 }
 
 func errorView(text string) string {
-	return titleStyle.Render("GitHub Dash — error") + "\n\n" + text + "\n\n" +
-		dimStyle.Render("q:quit")
+	return titleStyle.Render(i18n.T("app.error_title")) + "\n\n" + text + "\n\n" +
+		dimStyle.Render(i18n.T("footer.error"))
 }
 
 func cursorPrefix(selected bool) string {
@@ -177,27 +181,27 @@ func relTime(now, t time.Time) string {
 	d := now.Sub(t)
 	switch {
 	case d < time.Minute:
-		return "now"
+		return i18n.T("time.now")
 	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+		return i18n.Tn("time.minutes_ago", int(d.Minutes()))
 	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
+		return i18n.Tn("time.hours_ago", int(d.Hours()))
 	default:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+		return i18n.Tn("time.days_ago", int(d.Hours()/24))
 	}
 }
 
 func prMarkdown(pr ghcli.PR) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# #%d %s\n\n", pr.Number, pr.Title)
-	fmt.Fprintf(&b, "- **author**: @%s\n", pr.Author.Login)
+	fmt.Fprintf(&b, "- **%s**: @%s\n", i18n.T("md.author"), pr.Author.Login)
 	state := pr.State
 	if pr.IsDraft {
-		state += " (draft)"
+		state += i18n.T("md.draft_suffix")
 	}
-	fmt.Fprintf(&b, "- **state**: %s\n", state)
+	fmt.Fprintf(&b, "- **%s**: %s\n", i18n.T("md.state"), state)
 	if pr.ReviewDecision != "" {
-		fmt.Fprintf(&b, "- **review**: %s\n", pr.ReviewDecision)
+		fmt.Fprintf(&b, "- **%s**: %s\n", i18n.T("md.review"), pr.ReviewDecision)
 	}
 	writeCommonMeta(&b, pr.Labels, pr.UpdatedAt)
 	writeBody(&b, pr.Body)
@@ -208,8 +212,8 @@ func prMarkdown(pr ghcli.PR) string {
 func issueMarkdown(issue ghcli.Issue) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# #%d %s\n\n", issue.Number, issue.Title)
-	fmt.Fprintf(&b, "- **author**: @%s\n", issue.Author.Login)
-	fmt.Fprintf(&b, "- **state**: %s\n", issue.State)
+	fmt.Fprintf(&b, "- **%s**: @%s\n", i18n.T("md.author"), issue.Author.Login)
+	fmt.Fprintf(&b, "- **%s**: %s\n", i18n.T("md.state"), issue.State)
 	writeCommonMeta(&b, issue.Labels, issue.UpdatedAt)
 	writeBody(&b, issue.Body)
 	writeComments(&b, issue.Comments)
@@ -222,9 +226,9 @@ func writeCommonMeta(b *strings.Builder, labels []ghcli.Label, updatedAt time.Ti
 		for i, l := range labels {
 			names[i] = l.Name
 		}
-		fmt.Fprintf(b, "- **labels**: %s\n", strings.Join(names, ", "))
+		fmt.Fprintf(b, "- **%s**: %s\n", i18n.T("md.labels"), strings.Join(names, ", "))
 	}
-	fmt.Fprintf(b, "- **updated**: %s\n", updatedAt.Format("2006-01-02 15:04"))
+	fmt.Fprintf(b, "- **%s**: %s\n", i18n.T("md.updated"), updatedAt.Format("2006-01-02 15:04"))
 }
 
 func writeBody(b *strings.Builder, body string) {
@@ -232,7 +236,7 @@ func writeBody(b *strings.Builder, body string) {
 	if body != "" {
 		b.WriteString(body)
 	} else {
-		b.WriteString("_no description_")
+		b.WriteString(i18n.T("md.no_description"))
 	}
 }
 

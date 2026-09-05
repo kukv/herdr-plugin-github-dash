@@ -1,8 +1,8 @@
-// Package ui implements the GitHub Dash terminal UI.
+// Package ui implements the octoscope terminal UI.
 package ui
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 
 	"charm.land/bubbles/v2/spinner"
@@ -11,7 +11,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
 
-	"github.com/kukv/herdr-plugin-github-dash/internal/ghcli"
+	"github.com/kukv/octoscope/internal/ghcli"
+	"github.com/kukv/octoscope/internal/i18n"
 )
 
 // DataSource is what the UI needs from the GitHub layer.
@@ -127,11 +128,11 @@ type Model struct {
 	detailAssignees []string
 }
 
-func New(src DataSource, initial *Target) Model {
+func New(src DataSource) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	ta := textarea.New()
-	ta.Placeholder = "Leave a comment..."
+	ta.Placeholder = i18n.T("compose.placeholder")
 	ta.ShowLineNumbers = false
 	m := Model{
 		src:      src,
@@ -140,38 +141,15 @@ func New(src DataSource, initial *Target) Model {
 		detail:   viewport.New(viewport.WithWidth(80), viewport.WithHeight(20)),
 		textarea: ta,
 	}
-	if initial != nil {
-		m.screen = screenDetail
-		m.detailTarget = *initial
-		m.detailLoading = true
-	} else {
-		m.listLoading[m.tab] = true
-	}
+	m.listLoading[m.tab] = true
 	return m
-}
-
-// NewError builds a model that only shows an error message. It still constructs
-// the detail viewport and textarea because the shared WindowSizeMsg handler
-// resizes them, and v2's zero-value widgets panic on SetWidth.
-func NewError(text string) Model {
-	return Model{
-		screen:   screenError,
-		errText:  text,
-		detail:   viewport.New(viewport.WithWidth(80), viewport.WithHeight(20)),
-		textarea: textarea.New(),
-	}
 }
 
 func (m Model) Init() tea.Cmd {
 	if m.screen == screenError {
 		return nil
 	}
-	cmds := []tea.Cmd{m.spin.Tick, fetchRepoName(m.src)}
-	if m.screen == screenDetail {
-		cmds = append(cmds, fetchDetail(m.src, m.detailTarget))
-	} else {
-		cmds = append(cmds, fetchList(m.src, m.tab))
-	}
+	cmds := []tea.Cmd{m.spin.Tick, fetchRepoName(m.src), fetchList(m.src, m.tab)}
 	return tea.Batch(cmds...)
 }
 
@@ -360,7 +338,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.actionErr = ""
 		m.detailLabels = labelNames(msg.Labels)
 		m.detailAssignees = authorLogins(msg.Assignees)
-		m.detailTitle = fmt.Sprintf("PR #%d %s", msg.Number, msg.Title)
+		m.detailTitle = i18n.Tf("detail.pr_title", map[string]any{"Number": msg.Number, "Title": msg.Title})
 		m.setDetailContent(prMarkdown(ghcli.PR(msg)))
 		return m, nil
 	case issueDetailMsg:
@@ -369,7 +347,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.actionErr = ""
 		m.detailLabels = labelNames(msg.Labels)
 		m.detailAssignees = authorLogins(msg.Assignees)
-		m.detailTitle = fmt.Sprintf("Issue #%d %s", msg.Number, msg.Title)
+		m.detailTitle = i18n.Tf("detail.issue_title", map[string]any{"Number": msg.Number, "Title": msg.Title})
 		m.setDetailContent(issueMarkdown(ghcli.Issue(msg)))
 		return m, nil
 	case commentPostedMsg:
@@ -403,9 +381,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				names[i] = l.Name
 				colors[l.Name] = l.Color
 			}
-			m.picker = newPicker(pickLabels, "Labels", names, colors, m.detailLabels)
+			m.picker = newPicker(pickLabels, i18n.T("picker.labels"), names, colors, m.detailLabels)
 		} else {
-			m.picker = newPicker(pickAssignees, "Assignees", msg.users, nil, m.detailAssignees)
+			m.picker = newPicker(pickAssignees, i18n.T("picker.assignees"), msg.users, nil, m.detailAssignees)
 		}
 		m.picking = true
 		return m, nil
@@ -425,7 +403,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case errorMsg:
 		m.screen = screenError
-		m.errText = msg.err.Error()
+		if errors.Is(msg.err, ghcli.ErrGhNotFound) {
+			m.errText = i18n.T("error.gh_not_found")
+		} else {
+			m.errText = msg.err.Error()
+		}
 		return m, nil
 	case tea.KeyMsg:
 		return m.handleKey(msg)

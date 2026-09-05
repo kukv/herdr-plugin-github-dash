@@ -1,4 +1,4 @@
-module github.com/kukv/herdr-plugin-github-dash
+module github.com/kukv/octoscope
 
 go 1.27.1
 
@@ -8,6 +8,10 @@ require (
 	charm.land/glamour/v2 v2.0.1
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/charmbracelet/x/ansi v0.11.8
+	github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade
+	github.com/nicksnyder/go-i18n/v2 v2.6.1
+	go.yaml.in/yaml/v3 v3.0.4
+	golang.org/x/text v0.41.0
 )
 
 require (
@@ -35,5 +39,4 @@ require (
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.39.0 // indirect
 )
