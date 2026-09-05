@@ -46,3 +46,6 @@ bin/
 
 ### Test / coverage artifacts ###
 test-report.xml
+
+### GoReleaser ###
+dist/

@@ -1,4 +1,4 @@
-.PHONY: fmt fmt-check lint tidy-check test check
+.PHONY: fmt fmt-check lint tidy-check test check release-check
 
 # Auto-format the code (gofumpt + goimports via golangci-lint).
 fmt:
@@ -23,3 +23,10 @@ test:
 
 # Run everything the CI checks, locally.
 check: tidy-check lint fmt-check test
+
+# Validate the release configuration and cross-compilation (mirrors release CI).
+release-check:
+	goreleaser check
+	GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/octoscope
+	GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/octoscope
+	GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/octoscope

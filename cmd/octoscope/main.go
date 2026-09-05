@@ -15,12 +15,21 @@ import (
 	"github.com/kukv/octoscope/internal/ui"
 )
 
+// version is set by GoReleaser via -ldflags at release build time.
+var version = "dev"
+
 func main() {
 	repo := flag.String("repo", "",
 		"target repository as owner/name; defaults to the repository of the current directory")
 	lang := flag.String("lang", "",
 		"display language: en or ja; defaults to the operating system locale")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("octoscope " + version)
+		return
+	}
 
 	osLocale, _ := locale.GetLocale() // an error here just means "unknown"
 	i18n.SetLanguage(i18n.Resolve(*lang, osLocale))
