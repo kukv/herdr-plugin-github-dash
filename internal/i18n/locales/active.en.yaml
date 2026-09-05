@@ -108,3 +108,7 @@ time:
   days_ago:
     one: "{{.Count}}d ago"
     other: "{{.Count}}d ago"
+  # A Go reference-time layout, not a display string: the field order differs
+  # by language, so it belongs in the catalog rather than in the code.
+  datetime_layout:
+    other: "Jan 2, 2006 15:04"

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sort"
 	"sync"
+	"time"
 
 	goi18n "github.com/nicksnyder/go-i18n/v2/i18n"
 	yaml "go.yaml.in/yaml/v3"
@@ -97,6 +98,13 @@ func Tn(id string, n int) string {
 		PluralCount:  n,
 		TemplateData: map[string]any{"Count": n},
 	})
+}
+
+// DateTime formats t with the active language's layout. The catalog holds a
+// Go reference-time layout ("Jan 2, 2006 15:04"), not a display string,
+// because the field order differs by language.
+func DateTime(t time.Time) string {
+	return t.Format(T("time.datetime_layout"))
 }
 
 func render(cfg *goi18n.LocalizeConfig) string {

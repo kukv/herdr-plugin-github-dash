@@ -2,6 +2,7 @@ package i18n_test
 
 import (
 	"testing"
+	"time"
 
 	"golang.org/x/text/language"
 
@@ -95,5 +96,26 @@ func TestCatalogsHaveTheSameIDs(t *testing.T) {
 	}
 	if len(missingFromEn) > 0 {
 		t.Errorf("en catalog is missing IDs: %v", missingFromEn)
+	}
+}
+
+func TestDateTimeUsesThePerLanguageLayout(t *testing.T) {
+	t.Cleanup(func() { i18n.SetLanguage(language.English) })
+
+	when := time.Date(2026, 9, 6, 14, 5, 0, 0, time.UTC)
+
+	tests := []struct {
+		lang language.Tag
+		want string
+	}{
+		{language.English, "Sep 6, 2026 14:05"},
+		{language.Japanese, "2026年9月6日 14:05"},
+	}
+
+	for _, tt := range tests {
+		i18n.SetLanguage(tt.lang)
+		if got := i18n.DateTime(when); got != tt.want {
+			t.Errorf("lang %s: got %q, want %q", tt.lang, got, tt.want)
+		}
 	}
 }
